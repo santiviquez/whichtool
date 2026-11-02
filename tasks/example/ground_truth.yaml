@@ -1,0 +1,6 @@
+# Made up for the smoke test only.
+comparison: [postmark, sendgrid, amazon_ses, mailgun, resend]
+jobs:
+  j1:
+    best: postmark
+    alternates: [resend]
