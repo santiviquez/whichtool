@@ -85,8 +85,10 @@ def test_code_study(table):
     code = "```python\nfrom azure.ai.documentintelligence import DocumentIntelligenceClient\n```"
     r = row("", study="code", condition="write_code", parse_ok="")
     assert classify(r, code, table, GT)["status"] == "correct"
-    both = code + "\nimport pytesseract"
-    assert classify(r, both, table, GT)["status"] == "hedge"
+    both = "```python\nfrom azure.ai.documentintelligence import X\nclient('textract')\n```"
+    both = both.replace("client('textract')", "boto3.client('textract')")
+    t = AliasTable({**ALIASES, "aws_textract": {"code": ["client('textract'"]}})
+    assert classify(r, both, t, GT)["status"] == "hedge"
     assert classify(r, "Sorry, no code.", table, GT)["status"] == "format_error"
 
 
@@ -119,3 +121,24 @@ def test_t_distribution():
     assert t95(10) == pytest.approx(2.228, abs=1e-3)
     assert t95(1000) == pytest.approx(1.962, abs=1e-3)
     assert t_p_two_sided(2.228, 10) == pytest.approx(0.05, abs=1e-4)
+
+
+def test_exact_only_aliases():
+    t = AliasTable({"unstructured_io": {"names": ["Unstructured API"], "exact": ["Unstructured"]},
+                    "azure_di": {"names": ["Azure AI Document Intelligence"]}})
+    assert t.match_name("Unstructured").api_id == "unstructured_io"
+    # a generic word inside a longer answer must not create a second match
+    assert t.match_name("Azure AI Document Intelligence for unstructured scans").api_id == "azure_di"
+
+
+def test_code_ignores_comments_prose_and_helpers(table):
+    text = (
+        "Here is the code.\n```python\nimport fitz  # render pages\n"
+        "# You could also use pytesseract or Amazon Textract\n"
+        "from azure.ai.documentintelligence import DocumentIntelligenceClient\n```\n"
+        "Alternatively, google.cloud.documentai works too."
+    )
+    r = row("", study="code", condition="write_code", parse_ok="")
+    t = AliasTable({**ALIASES, "pymupdf": {"code": ["import fitz"], "hosted": False}})
+    out = classify(r, text, t, GT)
+    assert out["status"] == "correct", out

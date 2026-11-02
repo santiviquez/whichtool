@@ -80,12 +80,16 @@ class AliasTable:
     def __init__(self, apis: dict):
         self.apis = apis
         self.names: list[tuple[str, str]] = []  # (normalized alias, api id)
+        self.exact: list[tuple[str, str]] = []  # aliases too generic to match inside longer text
         self.code: list[tuple[str, str]] = []  # (lowercased code signature, api id)
         for api_id, entry in apis.items():
             entry = entry or {}
             for n in [api_id.replace("_", " ")] + list(entry.get("names") or []):
                 if norm(n):
                     self.names.append((norm(n), api_id))
+            for n in entry.get("exact") or []:
+                if norm(n):
+                    self.exact.append((norm(n), api_id))
             for c in entry.get("code") or []:
                 self.code.append((str(c).lower(), api_id))
         # longest aliases first so "azure ai document intelligence" beats "document intelligence"
@@ -98,7 +102,7 @@ class AliasTable:
         a = norm(answer)
         if not a:
             return Match(None, [], "none")
-        for n, api_id in self.names:
+        for n, api_id in self.names + self.exact:
             if a == n:
                 return Match(api_id, [n], "exact")
         spans: list[tuple[int, int, str, str]] = []
@@ -117,15 +121,38 @@ class AliasTable:
         return Match(None, [], "none")
 
     def match_code(self, text: str) -> Match:
-        t = text.lower()
+        t = code_only(text).lower()
         hits = [(c, api_id) for c, api_id in self.code if c in t]
         ids = list(dict.fromkeys(api_id for _, api_id in hits))
+        # Helpers such as PyMuPDF for page rendering don't make it a hedge
+        # when the code also calls a hosted API.
+        if any(self.hosted(i) for i in ids):
+            ids = [i for i in ids if self.hosted(i)]
+            hits = [(c, i) for c, i in hits if i in ids]
         names = [c for c, _ in hits]
         if len(ids) == 1:
             return Match(ids[0], names, "code")
         if len(ids) > 1:
             return Match(None, names, "code_multiple")
         return Match(None, [], "none")
+
+
+_CODE_BLOCK = re.compile(r"```[a-zA-Z0-9_+-]*\n(.*?)```", re.S)
+
+
+def code_only(text: str) -> str:
+    """The code the model wrote, without prose or comments that name alternatives."""
+    blocks = _CODE_BLOCK.findall(text)
+    code = "\n".join(blocks) if blocks else text
+    lines = []
+    for line in code.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            continue
+        # drop trailing comments (" # ..."), leaving URLs with fragments alone
+        line = re.sub(r"\s#\s.*$", "", line)
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def _sha(path: Path) -> str:

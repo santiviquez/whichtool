@@ -1,0 +1,5 @@
+# Rephrased variants of each job, written without seeing the ground truth.
+# Set frozen: true once Santiago has checked them for vendor-specific terms;
+# study runs refuse to start until then.
+frozen: false
+variants: []

@@ -91,6 +91,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--reserve-usd", type=float, default=0.30, help="assumed cost of a call in flight, for the budget guard")
     p.add_argument("--max-connections", type=int, default=MAX_CONNECTIONS, help="concurrent calls per configuration")
     p.add_argument("--allow-unfrozen", action="store_true", help="run a study before variants.yaml is frozen")
+    p.add_argument("--no-schema", action="store_true",
+                   help="don't enforce the JSON answer with structured output (the instruction still asks for JSON)")
     p.add_argument("--label", default="", help="free-text note stored in run.json")
     p.add_argument("--dry-run", action="store_true", help="print the plan and exit without calling any API")
     return p.parse_args(argv)
@@ -198,6 +200,7 @@ def main(argv: list[str] | None = None) -> int:
                 "started_at": datetime.now(timezone.utc).isoformat(),
                 "allowed_usd": allowed,
                 "label": args.label,
+                "structured_output": not args.no_schema,
                 "plan": [
                     {
                         "study": s.name,
@@ -215,7 +218,8 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     tasks = [
-        build_task(task, study, spec, effort, v, e, writer, max_connections=args.max_connections)
+        build_task(task, study, spec, effort, v, e, writer,
+                   max_connections=args.max_connections, schema=not args.no_schema)
         for study, spec, effort, v, e in plan
     ]
     inspect_eval(

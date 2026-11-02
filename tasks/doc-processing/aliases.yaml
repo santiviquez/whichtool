@@ -1,0 +1,140 @@
+# Canonical API id -> how models refer to it.
+#
+#   names:  aliases matched anywhere in the stated answer (longest match wins)
+#   exact:  aliases too generic to match inside longer text; they count only
+#           when they are the whole answer (e.g. "Unstructured")
+#   code:   case-insensitive substrings that show the code calls this API
+#           (imports, package names, hostnames); used by the code study
+#   hosted: false for self-hosted or open-source tools (always off_list)
+#
+# Written from general knowledge, without the ground truth: it lists the
+# usual candidates so most answers map on the first pass. Anything the
+# models name that is not here shows up in results/<task>/unmapped.csv;
+# add it here and rescore. Which of these are in Santiago's comparison is
+# decided by ground_truth.yaml, not by this file.
+apis:
+  azure_document_intelligence:
+    names: [Azure AI Document Intelligence, Azure Document Intelligence, Microsoft Document Intelligence,
+            Azure Form Recognizer, Form Recognizer, Document Intelligence]
+    code: [azure.ai.documentintelligence, azure-ai-documentintelligence, azure.ai.formrecognizer,
+           azure-ai-formrecognizer, /documentintelligence/, /formrecognizer/]
+  google_document_ai:
+    names: [Google Document AI, Google Cloud Document AI, GCP Document AI, Document AI]
+    code: [google.cloud.documentai, google-cloud-documentai, documentai.googleapis.com, documentai_v1]
+  aws_textract:
+    names: [Amazon Textract, AWS Textract, Textract]
+    code: ["client(\"textract\"", "client('textract'", amazon-textract, textractor, textract.amazonaws.com,
+           analyze_expense, start_document_analysis, start_expense_analysis]
+  mistral_ocr:
+    names: [Mistral OCR, Mistral Document AI, Mistral AI OCR, Mistral OCR API]
+    code: [mistral-ocr, ocr.process(]
+  reducto:
+    names: [Reducto, Reducto AI, Reducto API]
+    code: [reductoai, "from reducto", "import reducto", reducto.ai]
+  llamaparse:
+    names: [LlamaParse, Llama Parse, LlamaCloud, LlamaIndex LlamaParse, LlamaExtract, LlamaIndex Cloud]
+    code: [llama_parse, llama-parse, llama_cloud, llama-cloud, cloud.llamaindex.ai]
+  unstructured_io:
+    names: [Unstructured.io, Unstructured API, Unstructured Serverless API, Unstructured Platform,
+            Unstructured Platform API]
+    exact: [Unstructured]
+    code: [unstructured_client, unstructured-client, unstructuredapp.io, api.unstructured.io]
+  unstructured_oss:
+    names: [Unstructured open source, unstructured library]
+    code: [unstructured.partition]
+    hosted: false
+  landingai_ade:
+    names: [LandingAI Agentic Document Extraction, Landing AI Agentic Document Extraction,
+            Agentic Document Extraction, LandingAI ADE, LandingAI, Landing AI]
+    code: [agentic_doc, agentic-doc, landingai_ade, landing.ai]
+  datalab_marker_api:
+    names: [Datalab, Datalab Marker API, Datalab API, Marker API]
+    code: [datalab.to, "from datalab", datalab-python-sdk]
+  marker_oss:
+    names: [Marker open source, marker-pdf]
+    exact: [Marker]
+    code: [marker.converters, marker-pdf, marker_single]
+    hosted: false
+  mindee:
+    names: [Mindee, Mindee API, Mindee docTI]
+    code: [mindee]
+  veryfi:
+    names: [Veryfi, Veryfi API, Veryfi OCR API]
+    code: [veryfi]
+  nanonets:
+    names: [Nanonets, Nanonets OCR API, Nanonets API]
+    code: [nanonets]
+  docsumo:
+    names: [Docsumo]
+    code: [docsumo]
+  rossum:
+    names: [Rossum, Rossum.ai, Rossum Aurora]
+    code: [rossum]
+  abbyy:
+    names: [ABBYY, ABBYY Vantage, ABBYY FlexiCapture, ABBYY Cloud OCR SDK, ABBYY FineReader Server,
+            ABBYY Document AI]
+    code: [abbyy]
+  adobe_pdf_extract:
+    names: [Adobe PDF Extract API, Adobe PDF Services API, Adobe PDF Services, Adobe Extract API,
+            Adobe Acrobat Services]
+    code: [adobe.pdfservices, pdfservices-sdk, pdf-services.adobe.io, pdfservices]
+  upstage_document_parse:
+    names: [Upstage Document Parse, Upstage Document AI, Upstage Information Extraction, Upstage]
+    code: [api.upstage.ai, langchain_upstage]
+  extend_ai:
+    names: [Extend AI, Extend.ai, Extend API]
+    exact: [Extend]
+    code: [extend.ai, extend_ai]
+  chunkr:
+    names: [Chunkr, Chunkr AI, Chunkr.ai]
+    code: [chunkr]
+  affinda:
+    names: [Affinda]
+    code: [affinda]
+  klippa:
+    names: [Klippa, Klippa DocHorizon]
+    code: [klippa]
+  base64_ai:
+    names: [Base64.ai, Base64 AI]
+    code: [base64.ai]
+  sensible:
+    names: [Sensible, Sensible.so]
+    code: [sensible.so]
+  eden_ai:
+    names: [Eden AI, EdenAI]
+    code: [edenai]
+  hyperscience:
+    names: [Hyperscience]
+    code: [hyperscience]
+  instabase:
+    names: [Instabase, Instabase AI Hub]
+    code: [instabase]
+  # General-purpose model APIs, in case a model answers "just use an LLM".
+  openai_api:
+    names: [OpenAI API, OpenAI Responses API, OpenAI GPT-4o, GPT-4o, GPT-4.1, GPT-5, OpenAI]
+    code: ["from openai import", "openai.OpenAI(", api.openai.com]
+  gemini_api:
+    names: [Google Gemini API, Gemini API, Gemini 2.5 Pro, Gemini 2.5 Flash, Google Gemini]
+    exact: [Gemini]
+    code: [google.genai, google-genai, google.generativeai, generativelanguage.googleapis.com]
+  anthropic_api:
+    names: [Anthropic API, Claude API, Anthropic Claude API]
+    exact: [Claude]
+    code: ["from anthropic import", "anthropic.Anthropic(", api.anthropic.com]
+  # Self-hosted / open-source tools (always off_list).
+  tesseract:
+    names: [Tesseract, Tesseract OCR]
+    code: [pytesseract]
+    hosted: false
+  docling:
+    names: [Docling, IBM Docling]
+    code: [docling]
+    hosted: false
+  paddleocr:
+    names: [PaddleOCR, Paddle OCR]
+    code: [paddleocr]
+    hosted: false
+  pymupdf:
+    names: [PyMuPDF, fitz]
+    code: ["import fitz", pymupdf]
+    hosted: false

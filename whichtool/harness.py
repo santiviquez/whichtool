@@ -271,6 +271,7 @@ def build_task(
     epochs: int,
     writer: RunWriter,
     max_connections: int = MAX_CONNECTIONS,
+    schema: bool = True,
 ) -> Task:
     config = GenerateConfig(
         reasoning_effort=effort,  # type: ignore[arg-type]
@@ -279,7 +280,7 @@ def build_task(
         max_retries=6,
         attempt_timeout=1200,
     )
-    if study.answer == "structured":
+    if study.answer == "structured" and schema:
         config = config.merge(
             GenerateConfig(
                 response_schema=ResponseSchema(

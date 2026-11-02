@@ -1,0 +1,10 @@
+# The original job descriptions, written by Santiago. Each job is sent to the
+# models as-is (variant v00) and is the source for the rephrased variants in
+# variants.yaml. No tool or vendor names.
+#
+# jobs:
+#   - id: j1
+#     priority: accuracy          # for our records; never shown to the model
+#     text: |
+#       ...
+jobs: []

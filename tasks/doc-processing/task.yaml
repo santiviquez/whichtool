@@ -1,0 +1,6 @@
+name: doc-processing
+description: >
+  Which hosted document-processing API does a model pick for a job? Each job
+  describes a document-processing need with a different priority, without
+  naming any tool. The ground truth comes from Santiago's structured
+  comparison of these APIs and is added only after the variants are frozen.
