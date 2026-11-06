@@ -39,7 +39,7 @@ def _ci(r: dict) -> str:
 
 
 def _diff(r: dict) -> str:
-    if r["variants"] == 0:
+    if r["units"] == 0:
         return "n/a"
     d = f"{100 * r['diff']:+.0f} pts"
     if r["lo"] != r["lo"]:
@@ -73,10 +73,12 @@ class Config:
         self.metric = metric
         self.graded = [r for r in rows if r.get(metric) not in ("", None)]
         self.values = [float(r[metric]) for r in self.graded]
-        self.clusters = [r["variant_id"] for r in self.graded]
-        self.by_variant: dict[str, list[float]] = defaultdict(list)
-        for v, c in zip(self.values, self.clusters):
-            self.by_variant[c].append(v)
+        self.clusters = [r["job_id"] for r in self.graded]  # intervals: one cluster per job
+        self.by_variant: dict[str, list[float]] = defaultdict(list)  # pass^k: per prompt
+        self.job_of: dict[str, str] = {}
+        for v, r in zip(self.values, self.graded):
+            self.by_variant[r["variant_id"]].append(v)
+            self.job_of[r["variant_id"]] = r["job_id"]
 
     def ci(self) -> dict:
         return clustered_mean_ci(self.values, self.clusters)
@@ -87,6 +89,18 @@ class Config:
 
     def total(self, col: str) -> float:
         return sum(float(r[col]) for r in self.rows if r.get(col) not in ("", None))
+
+
+def paired_by_job(a: Config, b: Config) -> dict:
+    """a minus b, paired by job. Only variants both sides ran are used, so a side
+    study run on fewer wordings is compared with the same wordings of the headline."""
+    common = set(a.by_variant) & set(b.by_variant)
+    ja: dict[str, list[float]] = defaultdict(list)
+    jb: dict[str, list[float]] = defaultdict(list)
+    for v in common:
+        ja[a.job_of[v]] += a.by_variant[v]
+        jb[b.job_of[v]] += b.by_variant[v]
+    return paired_diff_ci(ja, jb)
 
 
 def group(rows: list[dict], study: str) -> dict[tuple[str, str], list[dict]]:
@@ -149,7 +163,7 @@ def build(rows: list[dict], task: str) -> str:
         f"aliases {rows[0].get('aliases_sha') or 'n/a'}, ground truth {rows[0].get('ground_truth_sha') or 'n/a'}.",
         "",
         "Strict accuracy counts only the ground-truth best API; lenient also accepts the listed alternates. "
-        "Intervals are 95% and clustered by prompt variant. Hedges, refusals, off-list picks and format "
+        "Intervals are 95% and clustered by job. Hedges, refusals, off-list picks and format "
         "failures all count as misses and are tallied separately.",
         "",
     ]
@@ -161,15 +175,15 @@ def build(rows: list[dict], task: str) -> str:
         lines += ["## 1. Headline: accuracy per configuration (no web search)", ""]
         lines += accuracy_table(head, epochs) + [""]
 
-        lines += ["## 2. Medium vs xhigh within each model (paired by variant)", ""]
-        lines += ["| Model | medium | xhigh | xhigh minus medium (95% CI) | p | Variants |", "|---|---|---|---|---|---|"]
+        lines += ["## 2. Medium vs xhigh within each model (paired by job)", ""]
+        lines += ["| Model | medium | xhigh | xhigh minus medium (95% CI) | p | Jobs |", "|---|---|---|---|---|---|"]
         for model in MODELS:
             a, b = head.get((model, "xhigh")), head.get((model, "medium"))
             if not a or not b:
                 continue
             ca, cb = Config(a, "strict_correct"), Config(b, "strict_correct")
-            d = paired_diff_ci(ca.by_variant, cb.by_variant)
-            lines.append(f"| {model} | {_f(cb.ci()['mean'])} | {_f(ca.ci()['mean'])} | {_diff(d)} | {_p(d['p'])} | {d['variants']} |")
+            d = paired_by_job(ca, cb)
+            lines.append(f"| {model} | {_f(cb.ci()['mean'])} | {_f(ca.ci()['mean'])} | {_diff(d)} | {_p(d['p'])} | {d['units']} |")
         lines.append("")
 
         lines += ["## 3. Best configuration of each vendor, head to head", ""]
@@ -181,11 +195,11 @@ def build(rows: list[dict], task: str) -> str:
                 best[vendor] = (acc, model, effort)
         if len(best) == 2 and graded:
             (va, (acc_a, ma, ea)), (vb, (acc_b, mb, eb)) = sorted(best.items())
-            d = paired_diff_ci(Config(head[(ma, ea)], "strict_correct").by_variant, Config(head[(mb, eb)], "strict_correct").by_variant)
+            d = paired_by_job(Config(head[(ma, ea)], "strict_correct"), Config(head[(mb, eb)], "strict_correct"))
             lines += [
                 f"Best {va}: {ma} at {ea} ({_f(acc_a)}). Best {vb}: {mb} at {eb} ({_f(acc_b)}).",
                 "",
-                f"{ma} {ea} minus {mb} {eb}: {_diff(d)}, p {_p(d['p'])}, over {d['variants']} variants. "
+                f"{ma} {ea} minus {mb} {eb}: {_diff(d)}, p {_p(d['p'])}, over {d['units']} jobs. "
                 "Note the best configuration is picked from the same data, so this comparison is slightly optimistic.",
                 "",
             ]
@@ -201,9 +215,9 @@ def build(rows: list[dict], task: str) -> str:
             searched = sum(1 for r in rr if str(r.get("searched")).lower() == "true") / len(rr)
             base = head.get((model, effort)) if head else None
             d = (
-                paired_diff_ci(Config(rr, "strict_correct").by_variant, Config(base, "strict_correct").by_variant)
+                paired_by_job(Config(rr, "strict_correct"), Config(base, "strict_correct"))
                 if base
-                else {"variants": 0, "p": float("nan")}
+                else {"units": 0, "p": float("nan")}
             )
             lines.append(f"| {model} | {_f(searched)} | {Config(rr, 'n_searches').mean('n_searches'):.1f} | {_diff(d)} | {_p(d['p'])} |")
         lines.append("")

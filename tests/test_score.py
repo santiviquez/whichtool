@@ -109,7 +109,7 @@ def test_paired_diff():
     a = {"v1": [1, 1], "v2": [1, 0], "v3": [0, 0]}
     b = {"v1": [1, 0], "v2": [0, 0], "v3": [0, 0]}
     d = paired_diff_ci(a, b)
-    assert abs(d["diff"] - (0.5 + 0.5 + 0) / 3) < 1e-9 and d["variants"] == 3
+    assert abs(d["diff"] - (0.5 + 0.5 + 0) / 3) < 1e-9 and d["units"] == 3
 
 
 def test_pass_hat_k():
@@ -152,3 +152,19 @@ def test_cut_off_answers_are_truncated_not_format_errors(table):
         out = classify(row("", parse_ok="False", stop_reason=stop), "", table, GT)
         assert out["status"] == "truncated" and out["strict_correct"] == 0
     assert classify(row("", parse_ok="False", stop_reason="end_turn"), "", table, GT)["status"] == "format_error"
+
+
+def test_report_clusters_by_job_and_pairs_on_shared_wordings():
+    from whichtool.report import Config, paired_by_job
+
+    def rows(values):  # values: {variant_id: [0/1, ...]}, job = the part before "-"
+        return [{"variant_id": v, "job_id": v.split("-")[0], "strict_correct": str(x)}
+                for v, xs in values.items() for x in xs]
+
+    head = Config(rows({"j1-v00": [1, 1], "j1-v01": [1, 1], "j1-v02": [1, 1], "j2-v00": [0, 0], "j2-v01": [1, 0]}),
+                  "strict_correct")
+    assert head.ci()["clusters"] == 2  # two jobs, not five wordings
+    side = Config(rows({"j1-v00": [0, 0], "j2-v00": [1, 1]}), "strict_correct")  # fewer wordings
+    d = paired_by_job(side, head)
+    # only v00 is shared: j1 0 - 1 = -1, j2 1 - 0 = +1
+    assert d["units"] == 2 and abs(d["diff"]) < 1e-9

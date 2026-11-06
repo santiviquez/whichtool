@@ -1,7 +1,9 @@
 """Small statistics helpers: clustered intervals, paired differences, pass^k.
 
-Repeats of one prompt are correlated, so every interval treats the prompt
-variant as the cluster (Miller, "Adding Error Bars to Evals", 2024).
+Calls on one job are correlated: repeats of a prompt, and rewordings of the
+same job, mostly get the same answer. So every interval treats the job as the
+cluster (Miller, "Adding Error Bars to Evals", 2024), and comparisons are
+paired by job.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ def t95(df: int) -> float:
 
 
 def clustered_mean_ci(values: list[float], clusters: list[str]) -> dict:
-    """Mean with a cluster-robust 95% interval (cluster = prompt variant)."""
+    """Mean with a cluster-robust 95% interval (the report clusters by job)."""
     n = len(values)
     if n == 0:
         return {"mean": float("nan"), "lo": float("nan"), "hi": float("nan"), "n": 0, "clusters": 0, "se": float("nan")}
@@ -47,20 +49,21 @@ def clustered_mean_ci(values: list[float], clusters: list[str]) -> dict:
 
 
 def paired_diff_ci(a: dict[str, list[float]], b: dict[str, list[float]]) -> dict:
-    """Mean of per-variant differences (a - b) over variants both configs saw."""
+    """Mean of per-unit differences (a - b) over the units (keys) both sides have.
+    The report passes one key per job."""
     common = sorted(set(a) & set(b))
     d = [sum(a[c]) / len(a[c]) - sum(b[c]) / len(b[c]) for c in common if a[c] and b[c]]
     k = len(d)
     if k == 0:
-        return {"diff": float("nan"), "lo": float("nan"), "hi": float("nan"), "variants": 0, "p": float("nan")}
+        return {"diff": float("nan"), "lo": float("nan"), "hi": float("nan"), "units": 0, "p": float("nan")}
     mean = sum(d) / k
     if k < 2:
-        return {"diff": mean, "lo": float("nan"), "hi": float("nan"), "variants": k, "p": float("nan")}
+        return {"diff": mean, "lo": float("nan"), "hi": float("nan"), "units": k, "p": float("nan")}
     sd = math.sqrt(sum((x - mean) ** 2 for x in d) / (k - 1))
     se = sd / math.sqrt(k)
     crit = t95(k - 1)
     p = t_p_two_sided(mean / se, k - 1) if se > 0 else (0.0 if mean != 0 else 1.0)
-    return {"diff": mean, "lo": mean - crit * se, "hi": mean + crit * se, "variants": k, "p": p}
+    return {"diff": mean, "lo": mean - crit * se, "hi": mean + crit * se, "units": k, "p": p}
 
 
 def pass_hat_k(c: int, n: int, k: int) -> float:

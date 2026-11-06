@@ -105,7 +105,7 @@ The scorer maps each answer to a canonical API id through `aliases.yaml` (names 
 
 A failed call says nothing about the model's choice, so it is left out of accuracy and counted in the report's "failed calls" column instead. Rerun it with `--resume`; once that call succeeds, the earlier failure is dropped.
 
-The report covers the three pre-registered comparisons (each configuration's accuracy with a 95% interval, medium vs xhigh within each model, and the best configuration of each vendor head to head), then the side studies, pass^k consistency, cost per correct pick and every configuration's picks per job. Intervals are clustered by prompt variant, and comparisons are paired by variant.
+The report covers the three pre-registered comparisons (each configuration's accuracy with a 95% interval, medium vs xhigh within each model, and the best configuration of each vendor head to head), then the side studies, pass^k consistency, cost per correct pick and every configuration's picks per job. Intervals are clustered by job and comparisons are paired by job, because rewordings of one job mostly get the same answer: with 8 jobs the intervals are honest but wide.
 
 ## Budget guard
 
