@@ -76,3 +76,22 @@ Money set aside per running call: from earlier calls for 12 of 12 configurations
 
 Run 20261106T172212Z-headline: 374 calls written (3 failed), 0 skipped for budget, $18.41 spent. Files in /home/user/whichtool/results/doc-processing/20261106T172212Z-headline
 3 calls have no successful result yet. Run them with: python -m whichtool.run --task doc-processing --resume 20261106T172212Z-headline
+
+===== 2026-11-06T18:24:28.894872+00:00 python -m whichtool.run --task doc-processing --resume 20261106T172212Z-headline
+Task doc-processing | study | 20261106T172212Z-headline | 12 configurations | 3 calls to make (2397 already done)
+  headline  opus-5.5     medium 40 variants x 5 epochs
+  headline  opus-5.5     high   40 variants x 5 epochs
+  headline  opus-5.5     xhigh  40 variants x 5 epochs
+  headline  fable-5.1    medium 40 variants x 5 epochs
+  headline  fable-5.1    high   40 variants x 5 epochs
+  headline  fable-5.1    xhigh  40 variants x 5 epochs
+  headline  gpt-6-astra  medium 40 variants x 5 epochs
+  headline  gpt-6-astra  high   40 variants x 5 epochs
+  headline  gpt-6-astra  xhigh  40 variants x 5 epochs
+  headline  gpt-5.6-sol  medium 40 variants x 5 epochs
+  headline  gpt-5.6-sol  high   40 variants x 5 epochs
+  headline  gpt-5.6-sol  xhigh  40 variants x 5 epochs
+Spent so far $137.88 of $140; this run may spend up to $2.12
+Money set aside per running call: from earlier calls for 12 of 12 configurations, $0.30 (RESERVE_USD) for the rest
+
+Run 20261106T172212Z-headline: 3 calls written (0 failed), 0 skipped for budget, $0.14 spent. Files in /home/user/whichtool/results/doc-processing/20261106T172212Z-headline

@@ -19,14 +19,16 @@ apis:
     code: [azure.ai.documentintelligence, azure-ai-documentintelligence, azure.ai.formrecognizer,
            azure-ai-formrecognizer, /documentintelligence/, /formrecognizer/]
   google_document_ai:
-    names: [Google Document AI, Google Cloud Document AI, GCP Document AI, Document AI]
+    names: [Google Document AI, Google Cloud Document AI, GCP Document AI]
+    exact: [Document AI]  # Mistral and Rossum also call their products "Document AI"
     code: [google.cloud.documentai, google-cloud-documentai, documentai.googleapis.com, documentai_v1]
   aws_textract:
     names: [Amazon Textract, AWS Textract, Textract]
-    code: ["client(\"textract\"", "client('textract'", amazon-textract, textractor, textract.amazonaws.com,
+    code: ["client(\"textract\"", "client('textract'", "\"textract\"", "'textract'", client-textract,
+           amazon-textract, textractor, textract.amazonaws.com,
            analyze_expense, start_document_analysis, start_expense_analysis]
   mistral_ocr:
-    names: [Mistral OCR, Mistral Document AI, Mistral AI OCR, Mistral OCR API]
+    names: [Mistral OCR, Mistral Document AI, Mistral AI OCR, Mistral OCR API, Mistral AI Document AI]
     code: [mistral-ocr, ocr.process(]
   reducto:
     names: [Reducto, Reducto AI, Reducto API]
@@ -109,10 +111,20 @@ apis:
   instabase:
     names: [Instabase, Instabase AI Hub]
     code: [instabase]
+  # Added 2026-11-06 after the first study runs (from unmapped.csv).
+  taggun:
+    names: [Taggun, Taggun Receipt OCR API, TAGGUN Receipt OCR API]
+    code: [taggun]
+  google_cloud_vision:
+    names: [Google Cloud Vision API, Google Cloud Vision, Cloud Vision API, Google Vision API]
+    code: [google.cloud.vision, google-cloud-vision, vision.googleapis.com]
+  azure_content_understanding:
+    names: [Azure AI Content Understanding, Azure Content Understanding, Microsoft Azure Content Understanding]
+    code: [contentunderstanding, content-understanding]
   # General-purpose model APIs, in case a model answers "just use an LLM".
   openai_api:
     names: [OpenAI API, OpenAI Responses API, OpenAI GPT-4o, GPT-4o, GPT-4.1, GPT-5, OpenAI]
-    code: ["from openai import", "openai.OpenAI(", api.openai.com]
+    code: ["from openai import", "import openai", "openai.OpenAI(", "openai.AsyncOpenAI(", api.openai.com]
   gemini_api:
     names: [Google Gemini API, Gemini API, Gemini 2.5 Pro, Gemini 2.5 Flash, Google Gemini]
     exact: [Gemini]
@@ -120,7 +132,8 @@ apis:
   anthropic_api:
     names: [Anthropic API, Claude API, Anthropic Claude API]
     exact: [Claude]
-    code: ["from anthropic import", "anthropic.Anthropic(", api.anthropic.com]
+    code: ["from anthropic import", "import anthropic", "anthropic.Anthropic(", "anthropic.AsyncAnthropic(",
+           api.anthropic.com]
   # Self-hosted / open-source tools (always off_list).
   tesseract:
     names: [Tesseract, Tesseract OCR]
