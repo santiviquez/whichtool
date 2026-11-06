@@ -57,3 +57,14 @@ PydanticSerializationUnexpectedValue: Expected `ActionFind` - serialized value m
 
 Run 20261106T173654Z-search: 17 calls written (8 failed), 0 skipped for budget, $1.84 spent. Files in /home/user/whichtool/results/doc-processing/20261106T173654Z-search
 8 calls have no successful result yet. Run them with: python -m whichtool.run --task doc-processing --resume 20261106T173654Z-search
+
+===== 2026-11-06T18:01:47.013231+00:00 python -m whichtool.run --task doc-processing --resume 20261106T173654Z-search
+Task doc-processing | study | 20261106T173654Z-search | 4 configurations | 8 calls to make (184 already done)
+  search    opus-5.5     high   24 variants x 2 epochs
+  search    fable-5.1    high   24 variants x 2 epochs
+  search    gpt-6-astra  high   24 variants x 2 epochs
+  search    gpt-5.6-sol  high   24 variants x 2 epochs
+Spent so far $117.58 of $140; this run may spend up to $22.42
+Money set aside per running call: from earlier calls for 4 of 4 configurations, $0.30 (RESERVE_USD) for the rest
+
+Run 20261106T173654Z-search: 8 calls written (0 failed), 0 skipped for budget, $1.90 spent. Files in /home/user/whichtool/results/doc-processing/20261106T173654Z-search
