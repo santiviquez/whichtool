@@ -1,6 +1,5 @@
 jobs:
   - id: j1
-    priority: latency
     text: |
       Our web app sends password-reset and order-confirmation emails. Last month
       some resets arrived ten minutes late and users gave up. We send about

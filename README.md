@@ -64,7 +64,7 @@ API keys come from the environment:
 
 ## Workflow for a task
 
-1. **Jobs.** The task owner writes 4 to 6 jobs in `tasks/<task>/jobs.yaml`, each with a different priority. The original text of each job is variant `v00`.
+1. **Jobs.** The task owner writes 4 to 6 jobs in `tasks/<task>/jobs.yaml`, each stressing a different need (accuracy, latency, cost, ease of integration). Only the `id` and `text` are read, and the text is all a model sees. The original text of each job is variant `v00`.
 2. **Variants.** Rephrased variants go in `tasks/<task>/variants.yaml`, written without seeing the ground truth. The task owner checks them for vendor-specific terms, then sets `frozen: true`. Study runs refuse to start before that.
 3. **Cost probe.** Two calls per configuration of every study, capped at $5:
    ```bash

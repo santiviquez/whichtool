@@ -2,9 +2,11 @@
 # models as-is (variant v00) and is the source for the rephrased variants in
 # variants.yaml. No tool or vendor names.
 #
+# Only the text is sent, so it alone has to make clear what matters most
+# in the job (accuracy, latency, cost or ease of integration).
+#
 # jobs:
 #   - id: j1
-#     priority: accuracy          # for our records; never shown to the model
 #     text: |
 #       ...
 jobs: []
