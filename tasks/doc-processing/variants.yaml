@@ -5,7 +5,7 @@
 #   v04 the question first.
 # Set frozen: true once Santiago has checked them for vendor-specific terms;
 # study runs refuse to start until then.
-frozen: false
+frozen: true  # frozen 2026-11-06 after Santiago checked the 32 rewordings
 variants:
   - id: j1-v01
     job_id: j1
