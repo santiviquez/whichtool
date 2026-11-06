@@ -4,10 +4,12 @@
 # clear what matters most in the job (accuracy, latency, cost or ease of
 # integration). The comments are for us; models never see them.
 #
-# Picked by Santiago on 2026-11-06 from candidates written by ChatGPT
-# (G1, G4, G7, G5, G10 in the candidate-jobs doc). Invoices are tested for
-# three needs and financial tables for two, so we can see whether a model
-# changes its pick when only the need changes.
+# All eight were written by ChatGPT (candidates G1 to G10 in the candidate-jobs
+# doc). Santiago picked j1 to j5 on 2026-11-06; Claude picked j6 to j8 at his
+# request, for coverage, and fixed one sentence in j7 (G3 said both
+# "a backlog" and "every month"). Each need is tested twice, and invoices,
+# receipts and financial tables are tested for more than one need, so we can
+# see whether a model changes its pick when only the need changes.
 jobs:
   # invoices, need: accuracy (candidate G1)
   - id: j1
@@ -57,3 +59,31 @@ jobs:
       structured JSON. Analysts verify the numbers before exporting, so minor extraction
       mistakes can be corrected. The problem is that users abandon the preview when a page
       takes more than five seconds to process. Which API should we use?
+  # receipts, need: latency (candidate G2)
+  - id: j6
+    text: >-
+      We're building an expense app where people photograph receipts and see the extracted
+      details immediately. We expect 75,000 JPEG images daily, mostly English and Portuguese,
+      with shadows, folds, and uneven lighting. Our Go backend needs the merchant, date, tax,
+      and total returned as JSON. Users are staring at their phones while this happens, and
+      many abandon the flow after three seconds. We can handle occasional errors through user
+      corrections, but processing each receipt in a batch later isn't an option. Which API
+      should we use?
+  # receipts, need: cost (candidate G3, one sentence fixed)
+  - id: j7
+    text: >-
+      We process three million receipts every month for an expense analytics project. They're
+      JPEGs and scanned PDFs, mostly English and Spanish, with mixed quality. Our Python
+      workers only need the merchant, date, currency, and total as JSON. Nobody waits for the
+      results, and we can spread processing across several days. We already have rules to flag
+      suspicious amounts for review. Our budget is $15,000 a month, so even a small difference
+      in the price per page adds up quickly. Which API should we use?
+  # printed paper forms, need: ease of integration (candidate G8)
+  - id: j8
+    text: >-
+      I maintain a small registration system for a nonprofit. We receive around 500 paper
+      forms each week, scanned at 300 dpi into PDFs. They're all in English, with printed
+      names, dates, addresses, and checkboxes. Our backend is in Java, and we need the fields
+      returned as predictable JSON. I'm the only developer maintaining this system, and I have
+      a week to ship the feature. I can't label training data, maintain custom models, or
+      build complicated document workflows. Which API should we use?

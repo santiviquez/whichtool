@@ -195,3 +195,111 @@ variants:
       backend needs cell values, headers and row labels as structured JSON. Analysts verify
       the numbers before exporting, so minor extraction mistakes can be corrected, but users
       abandon the preview when a page takes more than five seconds to process.
+  - id: j6-v01
+    job_id: j6
+    text: >-
+      We're building an expense app: people take a photo of a receipt and expect to see the
+      extracted details right away. We expect about 75,000 JPEG photos a day, mostly in
+      English and Portuguese, with shadows, folds and uneven lighting. Our Go backend needs
+      the merchant, date, tax and total back as JSON. Users stare at their phones while this
+      happens, and many drop out of the flow after three seconds. Occasional errors are fine
+      because users can correct them, but processing receipts later in a batch isn't an
+      option. Which API would you recommend?
+  - id: j6-v02
+    job_id: j6
+    text: >-
+      Building an expense app where users snap a receipt and see the details instantly. ~75k
+      JPEGs a day, mostly English and Portuguese, lots of shadows, folds and bad lighting. Go
+      backend, needs merchant, date, tax and total as JSON. People are staring at their phone
+      the whole time and many bail after three seconds. Occasional errors are OK since users
+      can fix them, but batching receipts for later isn't an option. What should we use?
+  - id: j6-v03
+    job_id: j6
+    text: >-
+      Many of our users abandon the flow if reading a receipt takes more than three seconds,
+      because they're staring at their phones while it happens. We're building an expense app
+      where people photograph receipts and see the extracted details immediately. We expect
+      75,000 JPEG images a day, mostly English and Portuguese, with shadows, folds and uneven
+      lighting. Our Go backend needs the merchant, date, tax and total as JSON. Users can
+      correct occasional errors, but processing receipts later in a batch isn't an option.
+      Which API should we use?
+  - id: j6-v04
+    job_id: j6
+    text: >-
+      Which API should we use to read receipt photos in an expense app, where people expect to
+      see the extracted details immediately? We expect 75,000 JPEG images a day, mostly
+      English and Portuguese, with shadows, folds and uneven lighting. Our Go backend needs
+      the merchant, date, tax and total returned as JSON. Users are staring at their phones
+      while this happens, and many abandon the flow after three seconds. We can handle
+      occasional errors through user corrections, but processing receipts in a batch later
+      isn't an option.
+  - id: j7-v01
+    job_id: j7
+    text: >-
+      Every month we process three million receipts for an expense analytics project. They
+      come as JPEGs and scanned PDFs, mostly in English and Spanish, and the quality varies.
+      Our Python workers only need the merchant, date, currency and total as JSON. Nobody is
+      waiting on the results, and processing can be spread over several days. We already have
+      rules that flag suspicious amounts for review. The budget is $15,000 a month, so even a
+      small difference in price per page adds up fast. Which API would you recommend?
+  - id: j7-v02
+    job_id: j7
+    text: >-
+      3M receipts a month for an expense analytics project. JPEGs and scanned PDFs, mostly
+      English and Spanish, mixed quality. Python workers, and all we need is merchant, date,
+      currency and total as JSON. Nobody's waiting on results, it can be spread over several
+      days, and we already flag suspicious amounts for review with our own rules. Budget is
+      $15k a month, so small differences in price per page add up fast. What should we use?
+  - id: j7-v03
+    job_id: j7
+    text: >-
+      Our budget is $15,000 a month, so even a small difference in the price per page adds up
+      quickly. We process three million receipts every month for an expense analytics project,
+      as JPEGs and scanned PDFs, mostly in English and Spanish and of mixed quality. Our
+      Python workers only need the merchant, date, currency and total as JSON. Nobody waits
+      for the results, processing can be spread across several days, and we already have rules
+      to flag suspicious amounts for review. Which API should we use?
+  - id: j7-v04
+    job_id: j7
+    text: >-
+      Which API should we use to process three million receipts a month for an expense
+      analytics project? They're JPEGs and scanned PDFs, mostly English and Spanish, with
+      mixed quality. Our Python workers only need the merchant, date, currency and total as
+      JSON. Nobody waits for the results, and processing can be spread across several days. We
+      already have rules that flag suspicious amounts for review. Our budget is $15,000 a
+      month, so even a small difference in the price per page adds up quickly.
+  - id: j8-v01
+    job_id: j8
+    text: >-
+      I look after a small registration system for a nonprofit. About 500 paper forms come in
+      each week and get scanned into PDFs at 300 dpi. They're all in English, with printed
+      names, dates, addresses and checkboxes. The backend is Java, and we need the fields back
+      as predictable JSON. I'm the only developer on this system and I have a week to ship the
+      feature, so I can't label training data, maintain custom models or build complicated
+      document workflows. Which API would you recommend?
+  - id: j8-v02
+    job_id: j8
+    text: >-
+      Solo dev at a nonprofit, maintaining a small registration system. ~500 paper forms a
+      week, scanned to PDF at 300 dpi, all English: printed names, dates, addresses,
+      checkboxes. Java backend, need the fields as predictable JSON. One week to ship. No
+      labeling training data, no custom models to maintain, no complicated document workflows.
+      What should we use?
+  - id: j8-v03
+    job_id: j8
+    text: >-
+      I'm the only developer maintaining our nonprofit's small registration system, and I have
+      a week to ship this feature, so I can't label training data, maintain custom models or
+      build complicated document workflows. We receive around 500 paper forms each week,
+      scanned at 300 dpi into PDFs. They're all in English, with printed names, dates,
+      addresses and checkboxes. Our backend is in Java, and we need the fields returned as
+      predictable JSON. Which API should we use?
+  - id: j8-v04
+    job_id: j8
+    text: >-
+      Which API should a nonprofit use to read about 500 paper registration forms a week? The
+      forms are scanned at 300 dpi into PDFs, all in English, with printed names, dates,
+      addresses and checkboxes. Our backend is in Java, and we need the fields returned as
+      predictable JSON. I'm the only developer maintaining this small registration system, and
+      I have a week to ship the feature. I can't label training data, maintain custom models
+      or build complicated document workflows.
