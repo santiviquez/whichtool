@@ -42,10 +42,11 @@ As soon as a call finishes it is appended to two files in `results/<task>/<run_i
 |---|---|
 | `calls.csv` | One flat row per call: ids, study, job, variant, epoch, model requested and returned, effort, the answer fields, whether it searched, tokens, cost, latency, errors |
 | `raw.jsonl` | The same plus the full prompt, the exact request and raw response of every API call, reasoning summaries, search queries and cited URLs |
-| `run.json` | The plan, the full settings from `config.py`, the instructions used, a hash of the prompts, and for each session (the first run and every resume) the git commit and SDK versions |
+| `run.json` | The plan, the full settings from `config.py`, the instructions used, a hash of the prompts, and for each session (the first run and every resume) the git commit, SDK versions and how it ended: calls written, failed and skipped, money spent, configurations stopped |
 | `started.txt` | The id of every call, written just before it is sent (see the budget guard) |
+| `console.log` | Everything the run printed, errors and tracebacks included, one block per session |
 
-Scoring and reporting read only these files, so they can be rerun at any time without any API call.
+Nothing in a run folder is ever overwritten or deleted. Failed calls keep their rows, `--resume` appends to the same files, and a rerun of the same study is a new folder. Scoring keeps only the latest successful call per slot in `scored.csv`, but the files above keep every attempt. Scoring and reporting read only these files, so they can be rerun at any time without any API call.
 
 ## Setup
 

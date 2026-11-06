@@ -7,7 +7,9 @@ Examples:
     python -m whichtool.run --task doc-processing --resume 20261107T010203Z-headline
 
 Every call is appended to results/<task>/<run_id>/calls.csv and raw.jsonl as
-soon as it finishes. Every setting comes from config.py; the flags here only
+soon as it finishes, failed calls included. Nothing in a run folder is ever
+overwritten: --resume appends, run.json gains one session per invocation
+(with its outcome), and everything printed goes to console.log too. Every setting comes from config.py; the flags here only
 choose what to run. --resume runs the calls of an earlier run that have no
 successful row yet: calls that failed, were skipped for budget, or never ran
 because the run stopped.
@@ -110,7 +112,8 @@ def git_commit() -> str:
         out = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True
         )
-        dirty = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+        dirty = subprocess.run(["git", "status", "--porcelain", "--", ".", ":(exclude)results"],
+                               capture_output=True, text=True)
         return out.stdout.strip() + ("-dirty" if dirty.stdout.strip() else "")
     except Exception:
         return "unknown"
@@ -199,6 +202,34 @@ def resumed_plan(run_dir: Path, task: TaskSpec) -> tuple[list[Config], str, dict
     return plan, saved["run_kind"], saved
 
 
+class _Tee:
+    """Write to the terminal and to a log file at once."""
+
+    def __init__(self, stream, log):
+        self.stream, self.log = stream, log
+
+    def write(self, text):
+        self.stream.write(text)
+        self.log.write(text)
+        self.log.flush()
+        return len(text)
+
+    def flush(self):
+        self.stream.flush()
+        self.log.flush()
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+
+
+def keep_console_log(run_dir: Path) -> None:
+    """Append everything printed from here on (errors and tracebacks too) to run_dir/console.log."""
+    run_dir.mkdir(parents=True, exist_ok=True)
+    log = (run_dir / "console.log").open("a")
+    log.write(f"\n===== {datetime.now(timezone.utc).isoformat()} python -m whichtool.run {' '.join(sys.argv[1:])}\n")
+    sys.stdout, sys.stderr = _Tee(sys.stdout, log), _Tee(sys.stderr, log)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     keys = setup_keys()
@@ -214,6 +245,9 @@ def main(argv: list[str] | None = None) -> int:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         run_id = f"{stamp}-{run_kind if run_kind == 'probe' else args.study}"
         run_dir = RESULTS_DIR / task.name / run_id
+
+    if not args.dry_run:
+        keep_console_log(run_dir)
 
     missing = sorted({c.spec.vendor for c in plan if not keys[c.spec.vendor]})
     if missing and not args.dry_run:
@@ -257,10 +291,27 @@ def main(argv: list[str] | None = None) -> int:
     )
     for key, err in writer.broken.items():
         print(f"Stopped {' '.join(key)} after an error that would repeat on every call: {err[:300]}")
+    record_outcome(run_dir, writer, left)
     if left:
         print(f"{left} calls have no successful result yet. Run them with: "
               f"python -m whichtool.run --task {args.task} --resume {run_id}")
     return 0
+
+
+def record_outcome(run_dir: Path, writer: RunWriter, left: int) -> None:
+    """Add how this session ended to its entry in run.json."""
+    path = run_dir / "run.json"
+    info = json.loads(path.read_text())
+    info["sessions"][-1].update({
+        "finished_at": datetime.now(timezone.utc).isoformat(),
+        "calls_written": writer.n_written,
+        "calls_failed": writer.n_errors,
+        "calls_skipped_for_budget": writer.n_skipped,
+        "spent_usd": round(writer.spent_usd, 6),
+        "stopped_configurations": {" ".join(k): v[:500] for k, v in writer.broken.items()},
+        "calls_without_success_left": left,
+    })
+    path.write_text(json.dumps(info, indent=2))
 
 
 async def execute(args, task, plan, run_kind, run_id, run_dir, saved, allowed, n_todo, reserves, skip):
