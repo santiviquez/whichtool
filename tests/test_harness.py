@@ -313,6 +313,21 @@ def test_a_rejected_request_stops_its_configuration(tmp_path):
     assert len(rows) == 1 and rows[0]["status"] == "api_error"  # the rest stay open for --resume
 
 
+def test_running_out_of_credits_stops_a_configuration():
+    import httpx2
+    import openai
+
+    from whichtool.harness import is_fatal
+
+    req = httpx2.Request("POST", "https://api.openai.com/v1/responses")
+    # how the OpenAI SDK raises an error event that arrives inside the stream: no status code
+    in_stream = openai.APIError("You have no credits remaining. Add credits to continue using the API.",
+                                request=req, body={"message": "You have no credits remaining."})
+    assert is_fatal(in_stream)
+    assert not is_fatal(openai.APIError("The server had an error while processing your request.", request=req,
+                                        body=None))
+
+
 def test_money_set_aside_per_configuration(tmp_path):
     # a configuration whose calls cost $4 each may not start under a $3 cap; a $0.01 one may
     task = load_task("example")

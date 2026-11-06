@@ -221,8 +221,16 @@ class Config:
 _FATAL_STATUS = {400, 401, 403, 404, 422}
 
 
+# An account out of money. OpenAI can report this inside the response stream,
+# where the error has no status code, so the message is checked too.
+_NO_CREDIT_PHRASES = ("no credits remaining", "insufficient_quota", "exceeded your current quota",
+                      "credit balance is too low")
+
+
 def is_fatal(e: Exception) -> bool:
-    return getattr(e, "status_code", None) in _FATAL_STATUS or getattr(e, "code", None) == "insufficient_quota"
+    if getattr(e, "status_code", None) in _FATAL_STATUS or getattr(e, "code", None) == "insufficient_quota":
+        return True
+    return any(p in str(e).lower() for p in _NO_CREDIT_PHRASES)
 
 
 def config_key(cfg: Config) -> tuple[str, str, str]:
