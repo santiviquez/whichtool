@@ -1,0 +1,29 @@
+
+===== 2026-11-06T17:22:12.272699+00:00 python -m whichtool.run --task doc-processing --study headline --epochs 5 --max-usd 50 --label headline: 8 jobs x 5 wordings x 5 repeats
+Task doc-processing | study | 20261106T172212Z-headline | 12 configurations | 2400 calls to make
+  headline  opus-5.5     medium 40 variants x 5 epochs
+  headline  opus-5.5     high   40 variants x 5 epochs
+  headline  opus-5.5     xhigh  40 variants x 5 epochs
+  headline  fable-5.1    medium 40 variants x 5 epochs
+  headline  fable-5.1    high   40 variants x 5 epochs
+  headline  fable-5.1    xhigh  40 variants x 5 epochs
+  headline  gpt-6-astra  medium 40 variants x 5 epochs
+  headline  gpt-6-astra  high   40 variants x 5 epochs
+  headline  gpt-6-astra  xhigh  40 variants x 5 epochs
+  headline  gpt-5.6-sol  medium 40 variants x 5 epochs
+  headline  gpt-5.6-sol  high   40 variants x 5 epochs
+  headline  gpt-5.6-sol  xhigh  40 variants x 5 epochs
+Spent so far $2.58 of $110; this run may spend up to $50.00
+Money set aside per running call: from earlier calls for 12 of 12 configurations, $0.30 (RESERVE_USD) for the rest
+
+Stopping headline gpt-5.6-sol xhigh: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Stopping headline gpt-6-astra high: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Stopping headline gpt-6-astra xhigh: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Run 20261106T172212Z-headline: 2010 calls written (3 failed), 0 skipped for budget, $43.78 spent. Files in /home/user/whichtool/results/doc-processing/20261106T172212Z-headline
+Stopped headline gpt-5.6-sol xhigh after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+Stopped headline gpt-6-astra high after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+Stopped headline gpt-6-astra xhigh after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+393 calls have no successful result yet. Run them with: python -m whichtool.run --task doc-processing --resume 20261106T172212Z-headline
