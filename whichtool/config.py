@@ -174,7 +174,7 @@ PROBE_CALLS_PER_CONFIG = 2  # the probe makes this many calls per configuration
 # only starts a call if spent + what is set aside for running calls fits
 # under the cap, and the ledger counts a call that started but was never
 # written (the process died) at its set-aside amount. Once a configuration
-# has successful calls in results/ (from the probe or an earlier run), its
+# has a successful call (in results/ or earlier in the same run), its
 # set-aside amount is the most expensive of them; this default is only used
 # before that.
 RESERVE_USD = 0.30

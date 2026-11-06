@@ -49,6 +49,7 @@ class FakeAnthropic:
                 return False
 
             async def get_final_message(self):
+                await asyncio.sleep(0.01)  # let other calls run meanwhile, like a real request
                 return fake.queue.pop(0) if len(fake.queue) > 1 else fake.queue[0]
 
         return _Stream()
@@ -343,3 +344,23 @@ def test_preflight_reports_unknown_models():
     client = SimpleNamespace(models=Models())
     errors = asyncio.run(preflight({"anthropic": client}, [MODELS["opus-5.5"], MODELS["fable-5.1"]]))
     assert list(errors) == ["fable-5.1"]
+
+
+def test_set_aside_amount_learns_from_finished_calls(tmp_path):
+    # before any data a call sets aside $5, so under a $6 cap only one runs at a time and the
+    # rest wait; once it has cost $0.0014, the waiting calls set aside that much instead
+    task = load_task("example")
+    w = RunWriter(run_dir=tmp_path, run_id="r", run_kind="study", task_name=task.name, variants_sha="",
+                  allowed_usd=6)
+    plan = [Config(STUDIES["headline"], MODELS["opus-5.5"], "high", task.variants, 3)]
+    import whichtool.config as config
+
+    old, config.RESERVE_USD = config.RESERVE_USD, 5.0
+    try:
+        asyncio.run(run_plan({"anthropic": FakeAnthropic()}, task, plan, w))
+    finally:
+        config.RESERVE_USD = old
+    rows = list(csv.DictReader((tmp_path / "calls.csv").open()))
+    assert len(rows) == 6 and all(r["status"] == "ok" for r in rows)
+    reserves = [float(line.split(",")[1]) for line in (tmp_path / "started.txt").read_text().split()]
+    assert reserves[0] == 5.0 and reserves[-1] == pytest.approx(0.0014)

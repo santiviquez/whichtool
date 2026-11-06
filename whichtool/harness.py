@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from . import config as C
 from .config import ModelSpec, Study
@@ -158,17 +158,23 @@ class RunWriter:
             with self.calls_path.open("w", newline="") as f:
                 csv.DictWriter(f, fieldnames=CALLS_COLUMNS).writeheader()
 
-    async def acquire(self, reserve: float) -> bool:
-        """Wait until `reserve` more fits under the cap. False means it never will, or the run is stopping."""
+    async def acquire(self, reserve_of: Callable[[], float]) -> float | None:
+        """Wait until the amount to set aside for one more call fits under the cap, and set it aside.
+
+        reserve_of() is asked again each time, so a call that waits picks up
+        what finished calls have taught. Returns the amount set aside, or None
+        if it can never fit or the run is stopping.
+        """
         while True:
             if self.stopping:
-                return False
+                return None
+            reserve = reserve_of()
             if self.spent_usd + reserve > self.allowed_usd:
-                return False
+                return None
             if self.spent_usd + self.in_flight_usd + reserve <= self.allowed_usd:
                 self.in_flight += 1
                 self.in_flight_usd += reserve
-                return True
+                return reserve
             await asyncio.sleep(0.5)
 
     def release(self, reserve: float) -> None:
@@ -230,9 +236,10 @@ async def run_call(
     variant: Variant,
     epoch: int,
     writer: RunWriter,
-    reserve: float,
+    reserve_of: Callable[[], float],
     schema: bool = C.STRUCTURED_OUTPUT,
-) -> None:
+) -> float | None:
+    """Make one call and write it. Returns its cost if it succeeded."""
     study, spec, effort = cfg.study, cfg.spec, cfg.effort
     base = {
         "call_id": uuid.uuid4().hex,
@@ -253,14 +260,15 @@ async def run_call(
     # Left out entirely (no row), so a resume runs it: the run is stopping, or
     # an earlier call of this configuration hit an error that would repeat.
     if writer.stopping or config_key(cfg) in writer.broken:
-        return
-    if not await writer.acquire(reserve):
+        return None
+    reserve = await writer.acquire(reserve_of)
+    if reserve is None:
         if not writer.stopping:
             writer.write({**base, "status": "skipped_budget", "cost_usd": 0}, None, None)
-        return
+        return None
     if config_key(cfg) in writer.broken:  # it broke while this call waited for budget
         writer.release(reserve)
-        return
+        return None
 
     instruction = task.code_instruction if study.answer == "code" else task.answer_instruction
     req = build_request(spec, study, effort, instruction, variant.text, schema)
@@ -284,6 +292,7 @@ async def run_call(
                "error": f"{error} | record: {type(e).__name__}: {e}"}
         raw = {**row, "request": req, "responses": responses, "output_text": text}
     writer.write(row, raw, reserve)
+    return float(row["cost_usd"]) if row.get("status") == "ok" else None
 
 
 def _record(base, spec, study, req, responses, text, error, started, t0):
@@ -366,11 +375,13 @@ async def run_plan(
 ) -> None:
     """Run every call of the plan except the slots in skip, at most max_connections at once per model.
 
-    reserves gives the money set aside per call of each configuration
-    (default RESERVE_USD). The first Ctrl-C stops new calls and lets the
+    reserves gives the money set aside per call of each configuration: the
+    most expensive successful call seen so far, or RESERVE_USD before there
+    is one. It is updated as calls finish, so the probe's first calls of a
+    configuration set the amount for the rest. The first Ctrl-C stops new calls and lets the
     running ones finish and be written; the second quits at once.
     """
-    reserves = reserves or {}
+    seen = dict(reserves or {})
     limits = {cfg.spec.label: asyncio.Semaphore(max_connections) for cfg in plan}
     loop = asyncio.get_running_loop()
 
@@ -387,8 +398,11 @@ async def run_plan(
 
     async def one(cfg: Config, variant: Variant, epoch: int) -> None:
         async with limits[cfg.spec.label]:
-            reserve = reserves.get(config_key(cfg), C.RESERVE_USD)
-            await run_call(clients[cfg.spec.vendor], task, cfg, variant, epoch, writer, reserve, schema)
+            key = config_key(cfg)
+            cost = await run_call(clients[cfg.spec.vendor], task, cfg, variant, epoch, writer,
+                                  lambda: seen.get(key, C.RESERVE_USD), schema)
+            if cost is not None:
+                seen[key] = max(seen.get(key, 0.0), cost)
 
     try:
         await asyncio.gather(*(one(c, v, e) for c, v, e in slots(plan) if slot_key(c, v, e) not in skip))
