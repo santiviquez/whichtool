@@ -10,3 +10,14 @@ Money set aside per running call: from earlier calls for 4 of 4 configurations, 
 
 Run 20261106T174228Z-code: 192 calls written (5 failed), 0 skipped for budget, $37.21 spent. Files in /home/user/whichtool/results/doc-processing/20261106T174228Z-code
 5 calls have no successful result yet. Run them with: python -m whichtool.run --task doc-processing --resume 20261106T174228Z-code
+
+===== 2026-11-06T17:58:01.043245+00:00 python -m whichtool.run --task doc-processing --resume 20261106T174228Z-code
+Task doc-processing | study | 20261106T174228Z-code | 4 configurations | 5 calls to make (187 already done)
+  code      opus-5.5     high   24 variants x 2 epochs
+  code      fable-5.1    high   24 variants x 2 epochs
+  code      gpt-6-astra  high   24 variants x 2 epochs
+  code      gpt-5.6-sol  high   24 variants x 2 epochs
+Spent so far $116.22 of $140; this run may spend up to $23.78
+Money set aside per running call: from earlier calls for 4 of 4 configurations, $0.30 (RESERVE_USD) for the rest
+
+Run 20261106T174228Z-code: 5 calls written (0 failed), 0 skipped for budget, $1.36 spent. Files in /home/user/whichtool/results/doc-processing/20261106T174228Z-code
