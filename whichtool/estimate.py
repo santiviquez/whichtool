@@ -4,7 +4,8 @@
 
 Reads every probe run's calls.csv for the task, takes the mean cost per call
 of each configuration, and says how many runs per configuration each study
-can afford with its share of what is left of the $100.
+can afford with its share of what is left of the budget. The shares and
+the margin held back are STUDY_SHARES and SAFETY_MARGIN in config.py.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from .config import BUDGET_USD, RESULTS_DIR, STUDIES
+from .config import BUDGET_USD, RESERVE_USD, RESULTS_DIR, SAFETY_MARGIN, STUDIES, STUDY_SHARES
 from .run import spent_so_far
 from .taskspec import load_task
 
@@ -24,8 +25,6 @@ from .taskspec import load_task
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--task", required=True)
-    p.add_argument("--shares", default="headline=0.70,search=0.15,code=0.15", help="budget share per study")
-    p.add_argument("--safety", type=float, default=0.10, help="fraction of the remaining budget held back")
     p.add_argument("--results-dir", default=str(RESULTS_DIR))
     args = p.parse_args(argv)
 
@@ -50,11 +49,15 @@ def main(argv: list[str] | None = None) -> int:
         c, t = costs[key], tokens[key]
         print(f"  {key[0]:9s} {key[1]:12s} {key[2]:6s} {len(c):5d} {sum(t)/len(t):8.0f} {sum(c)/len(c):8.4f}")
 
+    worst = max(max(c) for c in costs.values())
+    print(f"\nMost expensive probe call: ${worst:.4f}. RESERVE_USD in config.py is ${RESERVE_USD:.2f}"
+          + ("; raise it to at least that." if worst > RESERVE_USD else "."))
+
     spent = spent_so_far(results_dir)
-    remaining = (BUDGET_USD - spent) * (1 - args.safety)
-    shares = {k: float(v) for k, v in (s.split("=") for s in args.shares.split(","))}
+    remaining = (BUDGET_USD - spent) * (1 - SAFETY_MARGIN)
+    shares = STUDY_SHARES
     n_variants = len(task.variants)
-    print(f"\nSpent ${spent:.2f}. Planning with ${remaining:.2f} ({args.safety:.0%} held back). "
+    print(f"\nSpent ${spent:.2f}. Planning with ${remaining:.2f} ({SAFETY_MARGIN:.0%} held back). "
           f"The task has {n_variants} variants across {len({v.job_id for v in task.variants})} jobs.")
     for study_name, share in shares.items():
         study = STUDIES[study_name]

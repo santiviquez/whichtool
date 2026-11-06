@@ -21,7 +21,7 @@ from pathlib import Path
 import yaml
 
 from .config import TASKS_DIR
-from .prompts import ANSWER_INSTRUCTION, CODE_INSTRUCTION
+from .config import ANSWER_INSTRUCTION, CODE_INSTRUCTION
 
 
 @dataclass(frozen=True)

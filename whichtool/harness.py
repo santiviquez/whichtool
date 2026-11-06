@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import json
+import signal
 import time
 import uuid
 from dataclasses import dataclass
@@ -22,14 +23,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .config import MAX_TOKENS, ModelSpec, Study
-from .prompts import ANSWER_SCHEMA
+from . import config as C
+from .config import ModelSpec, Study
 from .records import CALLS_COLUMNS, cost_usd, extract, merge_extracts, parse_answer
 from .taskspec import TaskSpec, Variant
-
-# Anthropic's server-side search loop can stop with pause_turn; we send the
-# turn back so it continues, at most this many times.
-MAX_CONTINUATIONS = 5
 
 
 def _now() -> str:
@@ -40,40 +37,41 @@ def _now() -> str:
 
 
 def build_request(
-    spec: ModelSpec, study: Study, effort: str, instruction: str, text: str, schema: bool = True
+    spec: ModelSpec, study: Study, effort: str, instruction: str, text: str,
+    schema: bool = C.STRUCTURED_OUTPUT,
 ) -> dict[str, Any]:
-    """The exact keyword arguments for one call, for either vendor."""
+    """The exact keyword arguments for one call, for either vendor. Every setting comes from config.py."""
     structured = study.answer == "structured" and schema
     if spec.vendor == "anthropic":
         output_config: dict[str, Any] = {"effort": effort}
         if structured:
-            output_config["format"] = {"type": "json_schema", "schema": ANSWER_SCHEMA}
+            output_config["format"] = {"type": "json_schema", "schema": C.ANSWER_SCHEMA}
         req = {
             "model": spec.api_id,
-            "max_tokens": MAX_TOKENS[effort],
+            "max_tokens": C.MAX_TOKENS[effort],
             "system": instruction,
             "messages": [{"role": "user", "content": text}],
-            "thinking": {"type": "adaptive", "display": "summarized"},
+            "thinking": dict(C.CLAUDE_THINKING),
             "output_config": output_config,
         }
         if study.web_search:
-            req["tools"] = [{"type": "web_search_20260209", "name": "web_search"}]
+            req["tools"] = [dict(C.CLAUDE_WEB_SEARCH_TOOL)]
         return req
 
     req = {
         "model": spec.api_id,
         "instructions": instruction,
         "input": text,
-        "reasoning": {"effort": effort, "summary": "auto"},
-        "max_output_tokens": MAX_TOKENS[effort],
+        "reasoning": {"effort": effort, "summary": C.OPENAI_REASONING_SUMMARY},
+        "max_output_tokens": C.MAX_TOKENS[effort],
         "store": False,
     }
     if structured:
         req["text"] = {
-            "format": {"type": "json_schema", "name": "answer", "schema": ANSWER_SCHEMA, "strict": True}
+            "format": {"type": "json_schema", "name": "answer", "schema": C.ANSWER_SCHEMA, "strict": True}
         }
     if study.web_search:
-        req["tools"] = [{"type": "web_search"}]
+        req["tools"] = [dict(C.OPENAI_WEB_SEARCH_TOOL)]
         req["include"] = ["web_search_call.action.sources"]
     return req
 
@@ -87,7 +85,7 @@ async def send(client: Any, vendor: str, req: dict[str, Any]) -> tuple[list[dict
     if vendor == "anthropic":
         responses: list[dict] = []
         so_far: list[Any] = []  # assistant content blocks of every paused turn
-        for _ in range(MAX_CONTINUATIONS + 1):
+        for _ in range(C.CLAUDE_MAX_CONTINUATIONS + 1):
             messages = req["messages"] + ([{"role": "assistant", "content": so_far}] if so_far else [])
             async with client.messages.stream(**{**req, "messages": messages}) as stream:
                 msg = await stream.get_final_message()
@@ -109,7 +107,12 @@ async def send(client: Any, vendor: str, req: dict[str, Any]) -> tuple[list[dict
 class RunWriter:
     """Appends one row to calls.csv and one record to raw.jsonl per call,
     and enforces the run's spending cap. Everything runs on one event loop,
-    so no locks are needed."""
+    so no locks are needed.
+
+    started.txt gets a call's id just before it is sent. A call that started
+    but never reached calls.csv (the process died) is counted by spent_so_far
+    at reserve_usd, so the ledger never forgets money that may have been spent.
+    """
 
     run_dir: Path
     run_id: str
@@ -123,24 +126,32 @@ class RunWriter:
     n_written: int = 0
     n_skipped: int = 0
     n_errors: int = 0
+    stopping: bool = False  # set by Ctrl-C: start nothing new, finish what is running
 
     def __post_init__(self) -> None:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.calls_path = self.run_dir / "calls.csv"
         self.raw_path = self.run_dir / "raw.jsonl"
+        self.started_path = self.run_dir / "started.txt"
         if not self.calls_path.exists():
             with self.calls_path.open("w", newline="") as f:
                 csv.DictWriter(f, fieldnames=CALLS_COLUMNS).writeheader()
 
     async def acquire(self) -> bool:
-        """Wait for budget headroom. False means the run's budget is spent."""
+        """Wait for budget headroom. False means the budget is spent or the run is stopping."""
         while True:
+            if self.stopping:
+                return False
             if self.spent_usd + self.reserve_usd > self.allowed_usd:
                 return False
             if self.spent_usd + (self.in_flight + 1) * self.reserve_usd <= self.allowed_usd:
                 self.in_flight += 1
                 return True
             await asyncio.sleep(0.5)
+
+    def mark_started(self, call_id: str) -> None:
+        with self.started_path.open("a") as f:
+            f.write(call_id + "\n")
 
     def write(self, row: dict[str, Any], raw: dict[str, Any] | None, acquired: bool) -> None:
         if acquired:
@@ -179,7 +190,7 @@ async def run_call(
     variant: Variant,
     epoch: int,
     writer: RunWriter,
-    schema: bool = True,
+    schema: bool = C.STRUCTURED_OUTPUT,
 ) -> None:
     study, spec, effort = cfg.study, cfg.spec, cfg.effort
     base = {
@@ -198,12 +209,16 @@ async def run_call(
         "effort": effort,
         "variants_sha": writer.variants_sha,
     }
+    if writer.stopping:
+        return  # left out entirely, so a resume runs it
     if not await writer.acquire():
-        writer.write({**base, "status": "skipped_budget", "cost_usd": 0}, None, False)
+        if not writer.stopping:
+            writer.write({**base, "status": "skipped_budget", "cost_usd": 0}, None, False)
         return
 
     instruction = task.code_instruction if study.answer == "code" else task.answer_instruction
     req = build_request(spec, study, effort, instruction, variant.text, schema)
+    writer.mark_started(base["call_id"])
     started, t0 = _now(), time.monotonic()
     responses: list[dict] = []
     text, error = "", ""
@@ -265,27 +280,74 @@ def _record(base, spec, study, req, responses, text, error, started, t0):
     return row, raw
 
 
+Slot = tuple[str, str, str, str, int]  # study, model, effort, variant id, epoch
+
+
+def slots(plan: list[Config]) -> list[tuple[Config, Variant, int]]:
+    """Every call the plan makes."""
+    return [(cfg, v, e) for cfg in plan for e in range(1, cfg.epochs + 1) for v in cfg.variants]
+
+
+def slot_key(cfg: Config, variant: Variant, epoch: int) -> Slot:
+    return (cfg.study.name, cfg.spec.label, cfg.effort, variant.id, epoch)
+
+
+def done_slots(calls_path: Path) -> set[Slot]:
+    """Slots that already have a successful call in a run's calls.csv."""
+    if not calls_path.exists():
+        return set()
+    with calls_path.open() as f:
+        return {
+            (r["study"], r["model"], r["effort"], r["variant_id"], int(r["epoch"]))
+            for r in csv.DictReader(f)
+            if r.get("status") == "ok"
+        }
+
+
 async def run_plan(
     clients: dict[str, Any],
     task: TaskSpec,
     plan: list[Config],
     writer: RunWriter,
-    max_connections: int = 8,
-    schema: bool = True,
+    max_connections: int = C.MAX_CONNECTIONS,
+    schema: bool = C.STRUCTURED_OUTPUT,
+    skip: set[Slot] = frozenset(),
 ) -> None:
-    """Run every call of every configuration, at most max_connections at once per model."""
+    """Run every call of the plan except the slots in skip, at most max_connections at once per model.
+
+    The first Ctrl-C stops new calls and lets the running ones finish and be
+    written; the second quits at once.
+    """
     limits = {cfg.spec.label: asyncio.Semaphore(max_connections) for cfg in plan}
+    loop = asyncio.get_running_loop()
+
+    def interrupt() -> None:
+        writer.stopping = True
+        loop.remove_signal_handler(signal.SIGINT)  # a second Ctrl-C quits at once
+        print(f"\nStopping: no new calls; waiting for {writer.in_flight} running calls to be written. "
+              "Ctrl-C again to quit now. Resume later with --resume.", flush=True)
+
+    try:
+        loop.add_signal_handler(signal.SIGINT, interrupt)
+    except (NotImplementedError, RuntimeError, ValueError):  # not the main thread, or no signals here
+        pass
 
     async def one(cfg: Config, variant: Variant, epoch: int) -> None:
         async with limits[cfg.spec.label]:
             await run_call(clients[cfg.spec.vendor], task, cfg, variant, epoch, writer, schema)
 
-    await asyncio.gather(
-        *(one(cfg, v, e) for cfg in plan for e in range(1, cfg.epochs + 1) for v in cfg.variants)
-    )
+    try:
+        await asyncio.gather(*(one(c, v, e) for c, v, e in slots(plan) if slot_key(c, v, e) not in skip))
+    finally:
+        try:
+            loop.remove_signal_handler(signal.SIGINT)
+        except (NotImplementedError, RuntimeError, ValueError):
+            pass
 
 
-def make_clients(vendors: set[str], max_retries: int = 6, timeout: float = 1200.0) -> dict[str, Any]:
+def make_clients(
+    vendors: set[str], max_retries: int = C.MAX_RETRIES, timeout: float = C.TIMEOUT_S
+) -> dict[str, Any]:
     """Async SDK clients. The SDKs retry 429s, 5xx and dropped connections with backoff."""
     clients: dict[str, Any] = {}
     if "anthropic" in vendors:

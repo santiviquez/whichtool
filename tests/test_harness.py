@@ -4,6 +4,8 @@ import asyncio
 import csv
 import json
 
+import pytest
+
 from anthropic.types import Message
 from openai.types.responses import Response
 
@@ -167,3 +169,96 @@ def test_budget_guard_skips(tmp_path):
     assert w.n_written == 0 and w.n_skipped == 4
     assert all(r["status"] == "skipped_budget" for r in rows)
     assert raws == []
+
+
+class FlakyAnthropic(FakeAnthropic):
+    """Fails the first `n_fail` calls, then answers."""
+
+    def __init__(self, n_fail):
+        super().__init__()
+        self.n_fail = n_fail
+
+    def stream(self, **req):
+        s = super().stream(**req)
+        if self.n_fail > 0:
+            self.n_fail -= 1
+            fake_error = RuntimeError("overloaded")
+
+            class _Failing:
+                async def __aenter__(self):
+                    raise fake_error
+
+                async def __aexit__(self, *exc):
+                    return False
+
+            return _Failing()
+        return s
+
+
+def test_resume_reruns_only_unfinished_calls(tmp_path):
+    from whichtool.harness import done_slots, slot_key, slots
+    from whichtool.score import drop_superseded
+
+    task = load_task("example")
+    plan = [Config(STUDIES["headline"], MODELS["opus-5.5"], "high", task.variants, 2)]
+
+    def writer():
+        return RunWriter(run_dir=tmp_path, run_id="r", run_kind="study", task_name=task.name,
+                         variants_sha="", allowed_usd=10, reserve_usd=0)
+
+    # first session: one call fails
+    fake = FlakyAnthropic(n_fail=1)
+    asyncio.run(run_plan({"anthropic": fake}, task, plan, writer(), max_connections=1))
+    assert len(done_slots(tmp_path / "calls.csv")) == 3
+
+    # resume: only the failed slot is called again, and it lands in the same calls.csv
+    again = FakeAnthropic()
+    skip = done_slots(tmp_path / "calls.csv")
+    asyncio.run(run_plan({"anthropic": again}, task, plan, writer(), skip=skip))
+    assert len(again.requests) == 1
+    assert done_slots(tmp_path / "calls.csv") == {slot_key(*s) for s in slots(plan)}
+
+    rows = list(csv.DictReader((tmp_path / "calls.csv").open()))
+    assert [r["status"] for r in rows].count("api_error") == 1 and len(rows) == 5
+    kept = drop_superseded(rows)  # the scorer drops the failure the resume fixed
+    assert len(kept) == 4 and all(r["status"] == "ok" for r in kept)
+
+
+def test_stopping_starts_nothing_new(tmp_path):
+    task = load_task("example")
+    w = RunWriter(run_dir=tmp_path, run_id="r", run_kind="study", task_name=task.name,
+                  variants_sha="", allowed_usd=10, reserve_usd=0)
+    w.stopping = True
+    fake = FakeAnthropic()
+    plan = [Config(STUDIES["headline"], MODELS["opus-5.5"], "high", task.variants, 1)]
+    asyncio.run(run_plan({"anthropic": fake}, task, plan, w))
+    assert fake.requests == [] and w.n_skipped == 0
+    assert len(list(csv.DictReader((tmp_path / "calls.csv").open()))) == 0  # nothing marked as skipped
+
+
+def test_ledger_counts_calls_that_started_but_were_never_written(tmp_path):
+    from whichtool import config
+    from whichtool.run import spent_so_far
+
+    _, rows, _ = _run(tmp_path / "t" / "run1", {"anthropic": FakeAnthropic()}, epochs=1)
+    written = sum(float(r["cost_usd"]) for r in rows)
+    started = tmp_path / "t" / "run1" / "started.txt"
+    assert len(started.read_text().split()) == 2  # every call is marked before it is sent
+    with started.open("a") as f:
+        f.write("lost-call-id\n")  # e.g. the process was killed while this call ran
+    assert spent_so_far(tmp_path) == pytest.approx(written + config.RESERVE_USD)
+
+
+def test_every_request_setting_comes_from_config(monkeypatch):
+    from whichtool import config
+
+    monkeypatch.setitem(config.MAX_TOKENS, "high", 1234)
+    monkeypatch.setattr(config, "CLAUDE_THINKING", {"type": "adaptive", "display": "omitted"})
+    monkeypatch.setattr(config, "OPENAI_REASONING_SUMMARY", "detailed")
+    claude = build_request(MODELS["opus-5.5"], STUDIES["headline"], "high", "i", "t")
+    gpt = build_request(MODELS["gpt-6-astra"], STUDIES["headline"], "high", "i", "t")
+    assert claude["max_tokens"] == 1234 and claude["thinking"]["display"] == "omitted"
+    assert gpt["max_output_tokens"] == 1234 and gpt["reasoning"]["summary"] == "detailed"
+    snap = json.loads(json.dumps(config.snapshot()))  # run.json gets all of it
+    assert snap["experiment"]["max_tokens"]["high"] == 1234
+    assert snap["execution"]["max_connections"] == config.MAX_CONNECTIONS

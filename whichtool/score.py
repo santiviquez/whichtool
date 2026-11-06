@@ -8,7 +8,10 @@ Writes:
     results/<task>/scored.csv     one row per call, with its status
     results/<task>/unmapped.csv   answers no alias matched, for review
 
-Statuses (every one except correct/alternate is a miss):
+Statuses (every one except correct/alternate is a miss, except the two
+error statuses: a call that failed is left out of accuracy, because it says
+nothing about the model's choice. Rerun it with `run --resume`; once a slot
+has a successful call, its earlier failed rows are dropped):
     correct      the ground-truth best API
     alternate    an acceptable alternate (counts only for the lenient score)
     wrong        another API from the comparison
@@ -33,20 +36,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import RESULTS_DIR
+from .config import HEDGE_PHRASES, REFUSAL_PHRASES, RESULTS_DIR
 from .taskspec import TaskSpec, load_aliases, load_ground_truth, load_task
 
-HEDGE_PHRASES = [
-    "it depends",
-    "depends on",
-    "no single",
-    "either",
-    "multiple",
-    "combination of",
-    "none of",
-    "n/a",
-]
-REFUSAL_PHRASES = ["i can't recommend", "i cannot recommend", "i won't recommend", "unable to recommend"]
+ERROR_STATUSES = ("api_error", "record_error")
 
 SCORED_EXTRA = [
     "canonical_api",
@@ -176,13 +169,23 @@ def load_calls(task: TaskSpec, results_dir: Path, include_probe: bool) -> tuple[
                 for line in f:
                     rec = json.loads(line)
                     texts[rec["call_id"]] = rec.get("output_text") or ""
-    return rows, texts
+    return drop_superseded(rows), texts
+
+
+def _slot(r: dict) -> tuple:
+    return (r.get("run_id"), r.get("study"), r.get("model"), r.get("effort"), r.get("variant_id"), r.get("epoch"))
+
+
+def drop_superseded(rows: list[dict]) -> list[dict]:
+    """Drop failed rows of a slot (run, configuration, variant, repeat) that a resumed run later got right."""
+    ok = {_slot(r) for r in rows if r.get("status") == "ok"}
+    return [r for r in rows if r.get("status") == "ok" or _slot(r) not in ok]
 
 
 def classify(row: dict, text: str, table: AliasTable, gt: dict | None) -> dict:
     out = {k: "" for k in SCORED_EXTRA}
     refused = str(row.get("refused")).lower() == "true"
-    if row.get("status") in ("api_error", "record_error"):
+    if row.get("status") in ERROR_STATUSES:
         out["status"] = row["status"]
     elif refused:
         out["status"] = "refusal"
@@ -217,7 +220,7 @@ def classify(row: dict, text: str, table: AliasTable, gt: dict | None) -> dict:
                 if gt:
                     out["in_comparison"] = m.api_id in set(gt.get("comparison") or [])
 
-    if gt and out["status"] not in ("unscored",):
+    if gt and out["status"] not in ("unscored", *ERROR_STATUSES):
         out["strict_correct"] = int(out["status"] == "correct")
         out["lenient_correct"] = int(out["status"] in ("correct", "alternate"))
     return out

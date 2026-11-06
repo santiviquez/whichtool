@@ -1,26 +1,23 @@
-"""Models, effort levels, studies, prices and the budget.
+"""Every setting of the experiment, in one file.
 
-Everything a run depends on that is not task-specific lives here, so the
-whole setup can be read in one place and is written into every results row.
+Task-specific inputs (jobs, variants, aliases, ground truth) live in
+tasks/<task>/. Everything else a run depends on is here: models and prices,
+effort levels, studies, the prompts every model sees, the exact request
+settings, how calls are executed, the budget, and the scoring phrase lists.
+A copy of all of it is saved in each run's run.json (see snapshot()).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TASKS_DIR = ROOT / "tasks"
 RESULTS_DIR = ROOT / "results"
 
-# Hard cap on API spend across every run in results/, in USD.
-BUDGET_USD = 100.0
-# Cap for the cost probe (2 calls per configuration).
-PROBE_BUDGET_USD = 5.0
 
-# Both vendors charge $10 per 1,000 web searches; search results are billed
-# as input tokens on top of this.
-WEB_SEARCH_USD_PER_CALL = 10.0 / 1000
+# ============================================================== models
 
 
 @dataclass(frozen=True)
@@ -49,7 +46,14 @@ MODELS: dict[str, ModelSpec] = {
     ]
 }
 
+# Both vendors charge $10 per 1,000 web searches; search results are billed
+# as input tokens on top of this.
+WEB_SEARCH_USD_PER_CALL = 10.0 / 1000
+
 EFFORTS = ["medium", "high", "xhigh"]
+
+
+# ============================================================= studies
 
 
 @dataclass(frozen=True)
@@ -92,10 +96,138 @@ STUDIES: dict[str, Study] = {
     ]
 }
 
+
+# ============================================================= prompts
+# No persona or role. The system message is one fixed instruction; the job
+# text is the user's message. Both are identical for every model and effort.
+# A task can override either instruction in its task.yaml.
+
+REASONS = ["accuracy", "latency", "cost", "ease_of_integration", "reputation", "other"]
+
+ANSWER_INSTRUCTION = """\
+Recommend the one hosted API you would use for the job described in the user's message.
+
+Reply with a JSON object with exactly these fields:
+- "api": the name of the API, including its vendor
+- "reason": the main reason for your choice, one of "accuracy", "latency", "cost", "ease_of_integration", "reputation", "other"
+- "sentence": one short sentence explaining your choice"""
+
+CODE_INSTRUCTION = """\
+Write the Python code that does the job described in the user's message, using a hosted API. \
+Reply with the code in a single Python code block."""
+
+ANSWER_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "api": {"type": "string"},
+        "reason": {"type": "string", "enum": REASONS},
+        "sentence": {"type": "string"},
+    },
+    "required": ["api", "reason", "sentence"],
+    "additionalProperties": False,
+}
+
+
+# ==================================================== request settings
+# What goes into every request besides the model, effort and prompts.
+# No sampling parameters: none of these models accept them.
+
+# Enforce the JSON answer with each vendor's structured output. If a vendor
+# rejects it in some study (the probe will show), set this to False: the
+# instruction still asks for JSON and the parser tolerates stray text.
+STRUCTURED_OUTPUT = True
+
 # Generous output ceilings so long reasoning at xhigh is never cut off.
 # max_tokens is a ceiling, not a target: unused tokens are not billed.
 MAX_TOKENS = {"medium": 32_000, "high": 64_000, "xhigh": 64_000}
 
-# Per-model concurrency. Low enough to stay well inside rate limits, high
-# enough that a few hundred calls finish in minutes.
-MAX_CONNECTIONS = 8
+# Claude: adaptive thinking is the only mode these models accept; the
+# summary is saved in raw.jsonl for error analysis (billed the same either way).
+CLAUDE_THINKING = {"type": "adaptive", "display": "summarized"}
+CLAUDE_WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search"}
+# Claude's server-side search loop can stop with pause_turn; the harness
+# sends the turn back so it continues, at most this many times.
+CLAUDE_MAX_CONTINUATIONS = 5
+
+# OpenAI (Responses API): reasoning summaries are saved for error analysis.
+OPENAI_REASONING_SUMMARY = "auto"
+OPENAI_WEB_SEARCH_TOOL = {"type": "web_search"}
+
+
+# ==================================================== how calls run
+# These change speed and robustness, not results.
+
+MAX_CONNECTIONS = 8  # calls at once per model; low enough to stay inside rate limits
+MAX_RETRIES = 6  # the SDKs retry 429s, 5xx and dropped connections with backoff
+TIMEOUT_S = 1200  # per attempt; Claude calls stream, so this is rarely reached
+
+
+# ============================================================= budget
+
+BUDGET_USD = 100.0  # hard cap on API spend across every run in results/
+PROBE_BUDGET_USD = 5.0  # cap across cost-probe runs
+PROBE_CALLS_PER_CONFIG = 2  # the probe makes this many calls per configuration
+# Assumed cost of a call that has started but not finished. The guard only
+# starts a call if spent + (calls in flight + 1) x this fits under the cap,
+# and the ledger counts calls that started but were never written at this
+# price. Set it from the probe (estimate.py prints a suggestion).
+RESERVE_USD = 0.30
+# estimate.py: how the remaining budget is split, and how much is held back.
+STUDY_SHARES = {"headline": 0.70, "search": 0.15, "code": 0.15}
+SAFETY_MARGIN = 0.10
+
+
+# ============================================================ scoring
+# Matched after normalizing (lowercase, punctuation removed).
+
+HEDGE_PHRASES = [
+    "it depends",
+    "depends on",
+    "no single",
+    "either",
+    "multiple",
+    "combination of",
+    "none of",
+    "n/a",
+]
+REFUSAL_PHRASES = ["i can't recommend", "i cannot recommend", "i won't recommend", "unable to recommend"]
+
+
+# ============================================================ snapshot
+
+
+def snapshot() -> dict:
+    """Every setting above, as JSON, for run.json.
+
+    "experiment" holds what can change results; "execution" holds what only
+    changes speed and robustness. A run can only be resumed if "experiment"
+    is unchanged.
+    """
+    return {
+        "experiment": {
+            "models": {k: asdict(v) for k, v in MODELS.items()},
+            "web_search_usd_per_call": WEB_SEARCH_USD_PER_CALL,
+            "efforts": EFFORTS,
+            "studies": {k: asdict(v) for k, v in STUDIES.items()},
+            "answer_instruction": ANSWER_INSTRUCTION,
+            "code_instruction": CODE_INSTRUCTION,
+            "answer_schema": ANSWER_SCHEMA,
+            "structured_output": STRUCTURED_OUTPUT,
+            "max_tokens": MAX_TOKENS,
+            "claude_thinking": CLAUDE_THINKING,
+            "claude_web_search_tool": CLAUDE_WEB_SEARCH_TOOL,
+            "claude_max_continuations": CLAUDE_MAX_CONTINUATIONS,
+            "openai_reasoning_summary": OPENAI_REASONING_SUMMARY,
+            "openai_web_search_tool": OPENAI_WEB_SEARCH_TOOL,
+        },
+        "execution": {
+            "max_connections": MAX_CONNECTIONS,
+            "max_retries": MAX_RETRIES,
+            "timeout_s": TIMEOUT_S,
+            "budget_usd": BUDGET_USD,
+            "probe_budget_usd": PROBE_BUDGET_USD,
+            "probe_calls_per_config": PROBE_CALLS_PER_CONFIG,
+            "reserve_usd": RESERVE_USD,
+        },
+        "scoring": {"hedge_phrases": HEDGE_PHRASES, "refusal_phrases": REFUSAL_PHRASES},
+    }

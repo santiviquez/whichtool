@@ -70,9 +70,12 @@ def test_statuses(table, api, status, strict, lenient):
 
 
 def test_refusal_and_errors(table):
-    assert classify(row("", refused="True"), "", table, GT)["status"] == "refusal"
+    refused = classify(row("", refused="True"), "", table, GT)
+    assert refused["status"] == "refusal" and refused["strict_correct"] == 0
     assert classify(row("", parse_ok="False"), "", table, GT)["status"] == "format_error"
-    assert classify(row("", status="api_error"), "", table, GT)["status"] == "api_error"
+    failed = classify(row("", status="api_error"), "", table, GT)
+    # a failed call says nothing about the model's choice: not graded, so not in accuracy
+    assert failed["status"] == "api_error" and failed["strict_correct"] == "" and failed["lenient_correct"] == ""
 
 
 def test_no_ground_truth_is_unscored(table):

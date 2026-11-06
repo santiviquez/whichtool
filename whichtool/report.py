@@ -19,7 +19,9 @@ from pathlib import Path
 from .config import EFFORTS, MODELS, RESULTS_DIR
 from .stats import clustered_mean_ci, mean_pass_hat_k, paired_diff_ci
 
-MISS_STATUSES = ["wrong", "off_list", "hedge", "refusal", "format_error", "unmapped", "api_error"]
+MISS_STATUSES = ["wrong", "off_list", "hedge", "refusal", "format_error", "unmapped"]
+# Failed calls are not misses: they are left out of accuracy and shown on their own.
+ERROR_STATUSES = ["api_error", "record_error"]
 
 
 def _f(x: float, pct: bool = True) -> str:
@@ -97,23 +99,23 @@ def group(rows: list[dict], study: str) -> dict[tuple[str, str], list[dict]]:
 
 def accuracy_table(groups: dict, epochs_k: int) -> list[str]:
     out = [
-        "| Model | Effort | Runs | Strict accuracy (95% CI) | Lenient accuracy | "
-        f"pass^{epochs_k} | Misses: wrong / off-list / hedge / refusal / format / unmapped / error | "
-        "Mean output tokens | Mean cost | Cost per correct |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "| Model | Effort | Scored runs | Strict accuracy (95% CI) | Lenient accuracy | "
+        f"pass^{epochs_k} | Misses: wrong / off-list / hedge / refusal / format / unmapped | "
+        "Failed calls (not scored) | Mean output tokens | Mean cost | Cost per correct |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for (model, effort), rows in groups.items():
         strict, lenient = Config(rows, "strict_correct"), Config(rows, "lenient_correct")
         st = Counter(r["status"] for r in rows)
-        st["api_error"] += st.get("record_error", 0)
         misses = " / ".join(str(st.get(s, 0)) for s in MISS_STATUSES)
+        failed = sum(st.get(s, 0) for s in ERROR_STATUSES)
         n_correct = sum(strict.values)
         cost = strict.total("cost_usd")
         cpc = f"${cost / n_correct:.3f}" if n_correct else "n/a"
         pk = mean_pass_hat_k(strict.by_variant, epochs_k) if epochs_k >= 2 else float("nan")
         out.append(
-            f"| {model} | {effort} | {len(rows)} | {_ci(strict.ci())} | {_ci(lenient.ci())} | {_f(pk)} | "
-            f"{misses} | {_num(strict.mean('output_tokens'), '{:.0f}')} | {_num(strict.mean('cost_usd'), '${:.4f}')} | {cpc} |"
+            f"| {model} | {effort} | {len(strict.values)} | {_ci(strict.ci())} | {_ci(lenient.ci())} | {_f(pk)} | "
+            f"{misses} | {failed} | {_num(strict.mean('output_tokens'), '{:.0f}')} | {_num(strict.mean('cost_usd'), '${:.4f}')} | {cpc} |"
         )
     return out
 

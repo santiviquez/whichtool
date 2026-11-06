@@ -4,9 +4,13 @@ Examples:
     python -m whichtool.run --task doc-processing --probe
     python -m whichtool.run --task doc-processing --study headline --epochs 3
     python -m whichtool.run --task doc-processing --study search --models gpt-6-astra
+    python -m whichtool.run --task doc-processing --resume 20261107T010203Z-headline
 
 Every call is appended to results/<task>/<run_id>/calls.csv and raw.jsonl as
-soon as it finishes.
+soon as it finishes. Every setting comes from config.py; the flags here only
+choose what to run. --resume runs the calls of an earlier run that have no
+successful row yet: calls that failed, were skipped for budget, or never ran
+because the run stopped.
 """
 
 from __future__ import annotations
@@ -15,22 +19,17 @@ import argparse
 import asyncio
 import csv
 import json
+import math
 import os
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .config import (
-    BUDGET_USD,
-    MAX_CONNECTIONS,
-    MODELS,
-    PROBE_BUDGET_USD,
-    RESULTS_DIR,
-    STUDIES,
-)
-from .harness import Config, RunWriter, make_clients, run_plan
-from .taskspec import load_task
+from . import config as C
+from .config import BUDGET_USD, MODELS, PROBE_BUDGET_USD, RESULTS_DIR, STUDIES
+from .harness import Config, RunWriter, done_slots, make_clients, run_plan, slot_key, slots
+from .taskspec import TaskSpec, load_task
 
 # The cloud environment reserves ANTHROPIC_API_KEY for Claude Code's own
 # login, so the benchmark key is stored under a different name.
@@ -52,18 +51,32 @@ def setup_keys() -> dict[str, bool]:
     return have
 
 
+def _run_kind(run_dir: Path) -> str:
+    try:
+        return json.loads((run_dir / "run.json").read_text()).get("run_kind", "")
+    except (OSError, ValueError):
+        return ""
+
+
 def spent_so_far(results_dir: Path = RESULTS_DIR, kind: str | None = None) -> float:
-    """Total cost_usd over every calls.csv under results/ (optionally one run kind)."""
+    """The ledger: cost_usd over every calls.csv under results/ (optionally one run kind),
+    plus RESERVE_USD for every call that started but was never written."""
     total = 0.0
     for path in results_dir.glob("**/calls.csv"):
+        written = set()
         with path.open() as f:
             for row in csv.DictReader(f):
+                written.add(row.get("call_id"))
                 if kind and row.get("run_kind") != kind:
                     continue
                 try:
                     total += float(row.get("cost_usd") or 0)
                 except ValueError:
                     pass
+        started = path.parent / "started.txt"
+        if started.exists() and (not kind or _run_kind(path.parent) == kind):
+            lost = {line.strip() for line in started.read_text().splitlines() if line.strip()} - written
+            total += len(lost) * C.RESERVE_USD
     return total
 
 
@@ -82,40 +95,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--task", required=True, help="folder name under tasks/")
     p.add_argument("--study", choices=sorted(STUDIES), default="headline")
-    p.add_argument("--probe", action="store_true", help="cost probe: 2 calls per configuration of every study")
+    p.add_argument("--probe", action="store_true",
+                   help=f"cost probe: {C.PROBE_CALLS_PER_CONFIG} calls per configuration of every study")
+    p.add_argument("--resume", metavar="RUN_ID", default=None,
+                   help="rerun the calls of an earlier run that have no successful row yet")
     p.add_argument("--models", default=",".join(MODELS), help="comma-separated model labels")
     p.add_argument("--efforts", default=None, help="comma-separated effort levels (default: the study's)")
     p.add_argument("--epochs", type=int, default=1, help="repeats of every variant")
     p.add_argument("--jobs", default=None, help="only these job ids (comma-separated)")
     p.add_argument("--variants", default=None, help="only these variant ids (comma-separated)")
     p.add_argument("--max-usd", type=float, default=None, help="cap for this run (also capped by the total budget)")
-    p.add_argument("--reserve-usd", type=float, default=0.30, help="assumed cost of a call in flight, for the budget guard")
-    p.add_argument("--max-connections", type=int, default=MAX_CONNECTIONS, help="concurrent calls per configuration")
     p.add_argument("--allow-unfrozen", action="store_true", help="run a study before variants.yaml is frozen")
-    p.add_argument("--no-schema", action="store_true",
-                   help="don't enforce the JSON answer with structured output (the instruction still asks for JSON)")
     p.add_argument("--label", default="", help="free-text note stored in run.json")
     p.add_argument("--dry-run", action="store_true", help="print the plan and exit without calling any API")
     return p.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv)
-    keys = setup_keys()
-    task = load_task(args.task)
-
+def new_plan(args: argparse.Namespace, task: TaskSpec) -> tuple[list[Config], str]:
     labels = [m.strip() for m in args.models.split(",") if m.strip()]
     unknown = [m for m in labels if m not in MODELS]
     if unknown:
         sys.exit(f"Unknown models {unknown}; choose from {list(MODELS)}")
     specs = [MODELS[m] for m in labels]
-    missing = sorted({s.vendor for s in specs if not keys[s.vendor]})
-    if missing and not args.dry_run:
-        hint = {
-            "anthropic": "set WHICHTOOL_ANTHROPIC_API_KEY",
-            "openai": "set OPENAI_API_KEY",
-        }
-        sys.exit("Missing API keys: " + "; ".join(f"{v} ({hint[v]})" for v in missing))
 
     variants = task.variants
     if args.jobs:
@@ -129,49 +130,134 @@ def main(argv: list[str] | None = None) -> int:
 
     plan: list[Config] = []
     if args.probe:
-        # 2 calls per configuration: the original text of two different jobs,
-        # or one job twice if there is only one.
-        originals = [v for v in variants if v.id.endswith("-v00")] or variants
-        probe_variants, probe_epochs = (originals[:2], 1) if len(originals) >= 2 else (originals[:1], 2)
+        # PROBE_CALLS_PER_CONFIG calls per configuration: the original text of
+        # different jobs, repeating them when there are fewer jobs than calls.
+        n = C.PROBE_CALLS_PER_CONFIG
+        originals = ([v for v in variants if v.id.endswith("-v00")] or variants)[:n]
+        epochs = math.ceil(n / len(originals))
         for study in STUDIES.values():
             for spec in specs:
                 for effort in study.efforts:
-                    plan.append(Config(study, spec, effort, probe_variants, probe_epochs))
-        run_kind = "probe"
-        cap = PROBE_BUDGET_USD - spent_so_far(kind="probe")
+                    plan.append(Config(study, spec, effort, originals, epochs))
+        return plan, "probe"
+
+    if not task.variants_frozen and not args.allow_unfrozen:
+        sys.exit(
+            "variants.yaml is not frozen. Freeze it (frozen: true) before a study run, "
+            "or pass --allow-unfrozen for a test run."
+        )
+    study = STUDIES[args.study]
+    efforts = args.efforts.split(",") if args.efforts else list(study.efforts)
+    for spec in specs:
+        for effort in efforts:
+            plan.append(Config(study, spec, effort, variants, args.epochs))
+    return plan, "study"
+
+
+def resumed_plan(run_dir: Path, task: TaskSpec) -> tuple[list[Config], str, dict]:
+    """The plan of an earlier run, after checking nothing that changes results has changed since."""
+    try:
+        saved = json.loads((run_dir / "run.json").read_text())
+    except OSError:
+        sys.exit(f"No run.json in {run_dir}")
+    if saved.get("variants_sha") != task.variants_sha:
+        sys.exit("The task's prompts changed since this run started, so it can't be resumed. Start a new run.")
+    now = json.loads(json.dumps(C.snapshot()["experiment"]))
+    if saved.get("config", {}).get("experiment") != now:
+        sys.exit("Experiment settings in config.py changed since this run started, so it can't be resumed. "
+                 "Compare run.json's \"config\" with config.py, or start a new run.")
+    by_id = {v.id: v for v in task.variants}
+    plan = [
+        Config(STUDIES[c["study"]], MODELS[c["model"]], c["effort"], [by_id[i] for i in c["variants"]], c["epochs"])
+        for c in saved["plan"]
+    ]
+    return plan, saved["run_kind"], saved
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    keys = setup_keys()
+    task = load_task(args.task)
+
+    saved = None
+    if args.resume:
+        run_id = args.resume
+        run_dir = RESULTS_DIR / task.name / run_id
+        plan, run_kind, saved = resumed_plan(run_dir, task)
     else:
-        if not task.variants_frozen and not args.allow_unfrozen:
-            sys.exit(
-                "variants.yaml is not frozen. Freeze it (frozen: true) before a study run, "
-                "or pass --allow-unfrozen for a test run."
-            )
-        study = STUDIES[args.study]
-        efforts = args.efforts.split(",") if args.efforts else list(study.efforts)
-        for spec in specs:
-            for effort in efforts:
-                plan.append(Config(study, spec, effort, variants, args.epochs))
-        run_kind = "study"
-        cap = float("inf")
+        plan, run_kind = new_plan(args, task)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        run_id = f"{stamp}-{run_kind if run_kind == 'probe' else args.study}"
+        run_dir = RESULTS_DIR / task.name / run_id
+
+    missing = sorted({c.spec.vendor for c in plan if not keys[c.spec.vendor]})
+    if missing and not args.dry_run:
+        hint = {"anthropic": "set WHICHTOOL_ANTHROPIC_API_KEY", "openai": "set OPENAI_API_KEY"}
+        sys.exit("Missing API keys: " + "; ".join(f"{v} ({hint[v]})" for v in missing))
+
+    skip = done_slots(run_dir / "calls.csv")
+    todo = [s for s in slots(plan) if slot_key(*s) not in skip]
 
     total_spent = spent_so_far()
+    cap = PROBE_BUDGET_USD - spent_so_far(kind="probe") if run_kind == "probe" else float("inf")
     allowed = min(cap, BUDGET_USD - total_spent)
     if args.max_usd is not None:
         allowed = min(allowed, args.max_usd)
 
-    n_calls = sum(len(c.variants) * c.epochs for c in plan)
-    print(f"Task {task.name} | {run_kind} | {len(plan)} configurations | {n_calls} calls planned")
+    print(f"Task {task.name} | {run_kind} | {run_id} | {len(plan)} configurations | {len(todo)} calls to make"
+          + (f" ({len(skip)} already done)" if skip else ""))
     for c in plan:
-        print(f"  {c.study.name:9s} {c.spec.label:12s} {c.effort:6s} "
-              f"{len(c.variants)} variants x {c.epochs} epochs")
+        print(f"  {c.study.name:9s} {c.spec.label:12s} {c.effort:6s} {len(c.variants)} variants x {c.epochs} epochs")
     print(f"Spent so far ${total_spent:.2f} of ${BUDGET_USD:.0f}; this run may spend up to ${allowed:.2f}")
     if args.dry_run:
+        return 0
+    if not todo:
+        print("Nothing left to run.")
         return 0
     if allowed <= 0:
         sys.exit("No budget left for this run.")
 
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    run_id = f"{stamp}-{run_kind if args.probe else args.study}"
-    run_dir = RESULTS_DIR / task.name / run_id
+    import anthropic
+    import openai
+
+    started_at = datetime.now(timezone.utc).isoformat()
+    if saved is None:
+        info = {
+            "run_id": run_id,
+            "run_kind": run_kind,
+            "task": task.name,
+            "variants_sha": task.variants_sha,
+            "variants_frozen": task.variants_frozen,
+            "answer_instruction": task.answer_instruction,
+            "code_instruction": task.code_instruction,
+            "label": args.label,
+            "plan": [
+                {
+                    "study": c.study.name,
+                    "model": c.spec.label,
+                    "model_id": c.spec.api_id,
+                    "effort": c.effort,
+                    "variants": [v.id for v in c.variants],
+                    "epochs": c.epochs,
+                }
+                for c in plan
+            ],
+            "config": C.snapshot(),
+            "sessions": [],
+        }
+    else:
+        info = saved
+    info["sessions"].append({
+        "started_at": started_at,
+        "git_commit": git_commit(),
+        "anthropic_sdk_version": anthropic.__version__,
+        "openai_sdk_version": openai.__version__,
+        "allowed_usd": allowed,
+        "calls_to_make": len(todo),
+    })
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "run.json").write_text(json.dumps(info, indent=2))
+
     writer = RunWriter(
         run_dir=run_dir,
         run_id=run_id,
@@ -179,51 +265,18 @@ def main(argv: list[str] | None = None) -> int:
         task_name=task.name,
         variants_sha=task.variants_sha,
         allowed_usd=allowed,
-        reserve_usd=args.reserve_usd,
+        reserve_usd=C.RESERVE_USD,
     )
-    import anthropic
-    import openai
-
-    (run_dir / "run.json").write_text(
-        json.dumps(
-            {
-                "run_id": run_id,
-                "run_kind": run_kind,
-                "task": task.name,
-                "variants_sha": task.variants_sha,
-                "variants_frozen": task.variants_frozen,
-                "git_commit": git_commit(),
-                "anthropic_sdk_version": anthropic.__version__,
-                "openai_sdk_version": openai.__version__,
-                "started_at": datetime.now(timezone.utc).isoformat(),
-                "allowed_usd": allowed,
-                "label": args.label,
-                "structured_output": not args.no_schema,
-                "plan": [
-                    {
-                        "study": c.study.name,
-                        "model": c.spec.label,
-                        "model_id": c.spec.api_id,
-                        "effort": c.effort,
-                        "variants": [v.id for v in c.variants],
-                        "epochs": c.epochs,
-                    }
-                    for c in plan
-                ],
-            },
-            indent=2,
-        )
-    )
-
     clients = make_clients({c.spec.vendor for c in plan})
-    asyncio.run(
-        run_plan(clients, task, plan, writer, max_connections=args.max_connections,
-                 schema=not args.no_schema)
-    )
+    asyncio.run(run_plan(clients, task, plan, writer, skip=skip))
+    left = len([s for s in slots(plan) if slot_key(*s) not in done_slots(run_dir / "calls.csv")])
     print(
-        f"\nRun {run_id}: {writer.n_written} calls written ({writer.n_errors} errors), "
+        f"\nRun {run_id}: {writer.n_written} calls written ({writer.n_errors} failed), "
         f"{writer.n_skipped} skipped for budget, ${writer.spent_usd:.2f} spent. Files in {run_dir}"
     )
+    if left:
+        print(f"{left} calls have no successful result yet. Run them with: "
+              f"python -m whichtool.run --task {args.task} --resume {run_id}")
     return 0
 
 
