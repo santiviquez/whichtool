@@ -28,7 +28,17 @@ from pathlib import Path
 
 from . import config as C
 from .config import BUDGET_USD, MODELS, PROBE_BUDGET_USD, RESULTS_DIR, STUDIES
-from .harness import Config, RunWriter, done_slots, make_clients, run_plan, slot_key, slots
+from .harness import (
+    Config,
+    RunWriter,
+    config_key,
+    done_slots,
+    make_clients,
+    preflight,
+    run_plan,
+    slot_key,
+    slots,
+)
 from .taskspec import TaskSpec, load_task
 
 # The cloud environment reserves ANTHROPIC_API_KEY for Claude Code's own
@@ -60,7 +70,7 @@ def _run_kind(run_dir: Path) -> str:
 
 def spent_so_far(results_dir: Path = RESULTS_DIR, kind: str | None = None) -> float:
     """The ledger: cost_usd over every calls.csv under results/ (optionally one run kind),
-    plus RESERVE_USD for every call that started but was never written."""
+    plus the set-aside amount of every call that started but was never written."""
     total = 0.0
     for path in results_dir.glob("**/calls.csv"):
         written = set()
@@ -75,9 +85,24 @@ def spent_so_far(results_dir: Path = RESULTS_DIR, kind: str | None = None) -> fl
                     pass
         started = path.parent / "started.txt"
         if started.exists() and (not kind or _run_kind(path.parent) == kind):
-            lost = {line.strip() for line in started.read_text().splitlines() if line.strip()} - written
-            total += len(lost) * C.RESERVE_USD
+            for line in started.read_text().splitlines():
+                call_id, _, reserve = line.strip().partition(",")
+                if call_id and call_id not in written:
+                    total += float(reserve) if reserve else C.RESERVE_USD
     return total
+
+
+def observed_reserves(task_dir: Path) -> dict[tuple[str, str, str], float]:
+    """The most expensive successful call seen so far for each configuration of a task."""
+    out: dict[tuple[str, str, str], float] = {}
+    for path in task_dir.glob("*/calls.csv"):
+        with path.open() as f:
+            for r in csv.DictReader(f):
+                if r.get("status") != "ok":
+                    continue
+                key = (r["study"], r["model"], r["effort"])
+                out[key] = max(out.get(key, 0.0), float(r.get("cost_usd") or 0))
+    return out
 
 
 def git_commit() -> str:
@@ -209,6 +234,11 @@ def main(argv: list[str] | None = None) -> int:
     for c in plan:
         print(f"  {c.study.name:9s} {c.spec.label:12s} {c.effort:6s} {len(c.variants)} variants x {c.epochs} epochs")
     print(f"Spent so far ${total_spent:.2f} of ${BUDGET_USD:.0f}; this run may spend up to ${allowed:.2f}")
+    seen = observed_reserves(RESULTS_DIR / task.name)
+    reserves = {config_key(c): seen.get(config_key(c), C.RESERVE_USD) for c in plan}
+    from_data = sum(config_key(c) in seen for c in plan)
+    print(f"Money set aside per running call: from earlier calls for {from_data} of {len(plan)} configurations, "
+          f"${C.RESERVE_USD:.2f} (RESERVE_USD) for the rest")
     if args.dry_run:
         return 0
     if not todo:
@@ -217,10 +247,34 @@ def main(argv: list[str] | None = None) -> int:
     if allowed <= 0:
         sys.exit("No budget left for this run.")
 
+    writer = asyncio.run(execute(args, task, plan, run_kind, run_id, run_dir, saved, allowed, len(todo), reserves, skip))
+    if writer is None:
+        return 1
+    left = len([s for s in slots(plan) if slot_key(*s) not in done_slots(run_dir / "calls.csv")])
+    print(
+        f"\nRun {run_id}: {writer.n_written} calls written ({writer.n_errors} failed), "
+        f"{writer.n_skipped} skipped for budget, ${writer.spent_usd:.2f} spent. Files in {run_dir}"
+    )
+    for key, err in writer.broken.items():
+        print(f"Stopped {' '.join(key)} after an error that would repeat on every call: {err[:300]}")
+    if left:
+        print(f"{left} calls have no successful result yet. Run them with: "
+              f"python -m whichtool.run --task {args.task} --resume {run_id}")
+    return 0
+
+
+async def execute(args, task, plan, run_kind, run_id, run_dir, saved, allowed, n_todo, reserves, skip):
+    """Pre-flight check, run.json, then the calls, all on one event loop (the SDK clients belong to it)."""
     import anthropic
     import openai
 
-    started_at = datetime.now(timezone.utc).isoformat()
+    clients = make_clients({c.spec.vendor for c in plan})
+    specs = list({c.spec.label: c.spec for c in plan}.values())
+    errors = await preflight(clients, specs)
+    if errors:
+        print("Pre-flight check failed, nothing was spent:\n" + "\n".join(f"  {k}: {v}" for k, v in errors.items()))
+        return None
+
     if saved is None:
         info = {
             "run_id": run_id,
@@ -248,12 +302,13 @@ def main(argv: list[str] | None = None) -> int:
     else:
         info = saved
     info["sessions"].append({
-        "started_at": started_at,
+        "started_at": datetime.now(timezone.utc).isoformat(),
         "git_commit": git_commit(),
         "anthropic_sdk_version": anthropic.__version__,
         "openai_sdk_version": openai.__version__,
         "allowed_usd": allowed,
-        "calls_to_make": len(todo),
+        "calls_to_make": n_todo,
+        "reserves_usd": {" ".join(k): v for k, v in reserves.items()},
     })
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "run.json").write_text(json.dumps(info, indent=2))
@@ -265,19 +320,9 @@ def main(argv: list[str] | None = None) -> int:
         task_name=task.name,
         variants_sha=task.variants_sha,
         allowed_usd=allowed,
-        reserve_usd=C.RESERVE_USD,
     )
-    clients = make_clients({c.spec.vendor for c in plan})
-    asyncio.run(run_plan(clients, task, plan, writer, skip=skip))
-    left = len([s for s in slots(plan) if slot_key(*s) not in done_slots(run_dir / "calls.csv")])
-    print(
-        f"\nRun {run_id}: {writer.n_written} calls written ({writer.n_errors} failed), "
-        f"{writer.n_skipped} skipped for budget, ${writer.spent_usd:.2f} spent. Files in {run_dir}"
-    )
-    if left:
-        print(f"{left} calls have no successful result yet. Run them with: "
-              f"python -m whichtool.run --task {args.task} --resume {run_id}")
-    return 0
+    await run_plan(clients, task, plan, writer, reserves=reserves, skip=skip)
+    return writer
 
 
 if __name__ == "__main__":

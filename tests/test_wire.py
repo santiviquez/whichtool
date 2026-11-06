@@ -53,7 +53,7 @@ def test_claude_wire_format_and_pause_turn():
 
     assert len(responses) == 2 and text == ANSWER
     first = bodies[0]
-    assert first["stream"] is True
+    assert first["stream"] is True and first["max_tokens"] == 128_000
     assert first["output_config"]["effort"] == "xhigh"
     assert first["output_config"]["format"]["type"] == "json_schema"  # not the deprecated output_format
     assert "output_format" not in first and "temperature" not in first
@@ -68,14 +68,17 @@ def test_openai_wire_format():
 
     def handler(request):
         bodies.append(json.loads(request.content))
-        return httpx2.Response(200, json={
+        response = {
             "id": "resp_1", "object": "response", "created_at": 0, "model": "gpt-6-astra",
             "status": "completed", "parallel_tool_calls": True, "tool_choice": "auto", "tools": [],
             "output": [{"type": "message", "id": "m", "role": "assistant", "status": "completed",
                         "content": [{"type": "output_text", "text": ANSWER, "annotations": []}]}],
             "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2,
                       "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
-                      "output_tokens_details": {"reasoning_tokens": 0}}})
+                      "output_tokens_details": {"reasoning_tokens": 0}}}
+        events = [{"type": "response.created", "sequence_number": 0, "response": {**response, "status": "in_progress", "output": []}},
+                  {"type": "response.completed", "sequence_number": 1, "response": response}]
+        return httpx2.Response(200, text=_sse(events), headers={"content-type": "text/event-stream"})
 
     client = openai.AsyncOpenAI(
         api_key="test", http_client=openai.DefaultAsyncHttpxClient(transport=httpx2.MockTransport(handler)))
@@ -84,6 +87,7 @@ def test_openai_wire_format():
 
     assert text == ANSWER and len(responses) == 1
     body = bodies[0]
-    assert body["store"] is False and body["reasoning"]["effort"] == "medium"
+    assert body["store"] is False and body["reasoning"]["effort"] == "medium" and body["stream"] is True
+    assert body["max_output_tokens"] == 128_000
     assert body["text"]["format"]["type"] == "json_schema"
     assert "tools" not in body and "previous_response_id" not in body and "temperature" not in body

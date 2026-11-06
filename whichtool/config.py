@@ -29,9 +29,12 @@ class ModelSpec:
     usd_out: float  # per 1M output tokens (reasoning tokens are billed as output)
     usd_cache_read: float  # per 1M cached input tokens
     usd_cache_write: float  # per 1M cache-write input tokens (Anthropic only)
+    max_output_tokens: int  # the model's own output limit (reasoning included)
 
 
 # Prices checked 2026-11-02 (see the design doc's "Provider settings" table).
+# Output limits checked 2026-11-06: 128K on all four (Anthropic model table,
+# OpenAI model pages).
 # GPT-5.6 Sol's $4 / $20 is promotional through at least 2026-11-21.
 # OpenAI cached-input prices for these two models are not used by our
 # prompts (they are far below the caching minimum), so the full input price
@@ -39,10 +42,10 @@ class ModelSpec:
 MODELS: dict[str, ModelSpec] = {
     m.label: m
     for m in [
-        ModelSpec("opus-5.5", "anthropic", "claude-opus-5-5", 4.0, 20.0, 0.20, 5.0),
-        ModelSpec("fable-5.1", "anthropic", "claude-fable-5-1", 10.0, 50.0, 0.25, 12.5),
-        ModelSpec("gpt-6-astra", "openai", "gpt-6-astra", 10.0, 50.0, 10.0, 0.0),
-        ModelSpec("gpt-5.6-sol", "openai", "gpt-5.6-sol", 4.0, 20.0, 4.0, 0.0),
+        ModelSpec("opus-5.5", "anthropic", "claude-opus-5-5", 4.0, 20.0, 0.20, 5.0, 128_000),
+        ModelSpec("fable-5.1", "anthropic", "claude-fable-5-1", 10.0, 50.0, 0.25, 12.5, 128_000),
+        ModelSpec("gpt-6-astra", "openai", "gpt-6-astra", 10.0, 50.0, 10.0, 0.0, 128_000),
+        ModelSpec("gpt-5.6-sol", "openai", "gpt-5.6-sol", 4.0, 20.0, 4.0, 0.0, 128_000),
     ]
 }
 
@@ -137,9 +140,9 @@ ANSWER_SCHEMA: dict = {
 # instruction still asks for JSON and the parser tolerates stray text.
 STRUCTURED_OUTPUT = True
 
-# Generous output ceilings so long reasoning at xhigh is never cut off.
-# max_tokens is a ceiling, not a target: unused tokens are not billed.
-MAX_TOKENS = {"medium": 32_000, "high": 64_000, "xhigh": 64_000}
+# Every call may use the model's full output limit (max_output_tokens
+# above), so an answer is only cut off where the model itself would be.
+# The limit is a ceiling, not a target: only tokens actually used are billed.
 
 # Claude: adaptive thinking is the only mode these models accept; the
 # summary is saved in raw.jsonl for error analysis (billed the same either way).
@@ -147,7 +150,7 @@ CLAUDE_THINKING = {"type": "adaptive", "display": "summarized"}
 CLAUDE_WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search"}
 # Claude's server-side search loop can stop with pause_turn; the harness
 # sends the turn back so it continues, at most this many times.
-CLAUDE_MAX_CONTINUATIONS = 5
+CLAUDE_MAX_CONTINUATIONS = 10
 
 # OpenAI (Responses API): reasoning summaries are saved for error analysis.
 OPENAI_REASONING_SUMMARY = "auto"
@@ -167,10 +170,13 @@ TIMEOUT_S = 1200  # per attempt; Claude calls stream, so this is rarely reached
 BUDGET_USD = 100.0  # hard cap on API spend across every run in results/
 PROBE_BUDGET_USD = 5.0  # cap across cost-probe runs
 PROBE_CALLS_PER_CONFIG = 2  # the probe makes this many calls per configuration
-# Assumed cost of a call that has started but not finished. The guard only
-# starts a call if spent + (calls in flight + 1) x this fits under the cap,
-# and the ledger counts calls that started but were never written at this
-# price. Set it from the probe (estimate.py prints a suggestion).
+# Money set aside for a call that has started but not finished: the guard
+# only starts a call if spent + what is set aside for running calls fits
+# under the cap, and the ledger counts a call that started but was never
+# written (the process died) at its set-aside amount. Once a configuration
+# has successful calls in results/ (from the probe or an earlier run), its
+# set-aside amount is the most expensive of them; this default is only used
+# before that.
 RESERVE_USD = 0.30
 # estimate.py: how the remaining budget is split, and how much is held back.
 STUDY_SHARES = {"headline": 0.70, "search": 0.15, "code": 0.15}
@@ -213,7 +219,6 @@ def snapshot() -> dict:
             "code_instruction": CODE_INSTRUCTION,
             "answer_schema": ANSWER_SCHEMA,
             "structured_output": STRUCTURED_OUTPUT,
-            "max_tokens": MAX_TOKENS,
             "claude_thinking": CLAUDE_THINKING,
             "claude_web_search_tool": CLAUDE_WEB_SEARCH_TOOL,
             "claude_max_continuations": CLAUDE_MAX_CONTINUATIONS,

@@ -17,7 +17,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from .config import BUDGET_USD, RESERVE_USD, RESULTS_DIR, SAFETY_MARGIN, STUDIES, STUDY_SHARES
+from .config import BUDGET_USD, RESULTS_DIR, SAFETY_MARGIN, STUDIES, STUDY_SHARES
 from .run import spent_so_far
 from .taskspec import load_task
 
@@ -44,14 +44,11 @@ def main(argv: list[str] | None = None) -> int:
         sys.exit("No successful probe calls found. Run `python -m whichtool.run --task ... --probe` first.")
 
     print("Mean cost per call from the probe:")
-    print(f"  {'study':9s} {'model':12s} {'effort':6s} {'calls':>5s} {'out tok':>8s} {'$/call':>8s}")
+    print(f"  {'study':9s} {'model':12s} {'effort':6s} {'calls':>5s} {'out tok':>8s} {'$/call':>8s} {'max $':>8s}")
     for key in sorted(costs):
         c, t = costs[key], tokens[key]
-        print(f"  {key[0]:9s} {key[1]:12s} {key[2]:6s} {len(c):5d} {sum(t)/len(t):8.0f} {sum(c)/len(c):8.4f}")
-
-    worst = max(max(c) for c in costs.values())
-    print(f"\nMost expensive probe call: ${worst:.4f}. RESERVE_USD in config.py is ${RESERVE_USD:.2f}"
-          + ("; raise it to at least that." if worst > RESERVE_USD else "."))
+        print(f"  {key[0]:9s} {key[1]:12s} {key[2]:6s} {len(c):5d} {sum(t)/len(t):8.0f} "
+              f"{sum(c)/len(c):8.4f} {max(c):8.4f}")
 
     spent = spent_so_far(results_dir)
     remaining = (BUDGET_USD - spent) * (1 - SAFETY_MARGIN)

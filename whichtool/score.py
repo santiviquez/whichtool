@@ -18,6 +18,8 @@ has a successful call, its earlier failed rows are dropped):
     off_list     a known API outside the comparison, or a self-hosted tool
     hedge        more than one API named, or "it depends"
     refusal      the model declined (refusal stop reason or refusal text)
+    truncated    no answer because the model used its whole output limit, or
+                 Claude's search was still running after the last continuation
     format_error the answer could not be parsed, or the code had no code
     api_error    the call failed
     record_error the call finished but the harness failed to record it (a harness bug)
@@ -40,6 +42,8 @@ from .config import HEDGE_PHRASES, REFUSAL_PHRASES, RESULTS_DIR
 from .taskspec import TaskSpec, load_aliases, load_ground_truth, load_task
 
 ERROR_STATUSES = ("api_error", "record_error")
+# stop_reason values (as calls.csv writes them) that mean the answer never finished
+CUT_OFF = ("max_tokens", "pause_turn", "incomplete:max_output_tokens")
 
 SCORED_EXTRA = [
     "canonical_api",
@@ -190,15 +194,16 @@ def classify(row: dict, text: str, table: AliasTable, gt: dict | None) -> dict:
     elif refused:
         out["status"] = "refusal"
     else:
+        cut_off = row.get("stop_reason") in CUT_OFF
         if row.get("study") == "code" or row.get("condition") == "write_code":
             if "```" not in text and "import " not in text:
-                out["status"] = "format_error"
+                out["status"] = "truncated" if cut_off else "format_error"
                 m = Match(None, [], "none")
             else:
                 m = table.match_code(text)
         else:
             if str(row.get("parse_ok")).lower() != "true":
-                out["status"] = "format_error"
+                out["status"] = "truncated" if cut_off else "format_error"
                 m = Match(None, [], "none")
             else:
                 m = table.match_name(row.get("api", ""))

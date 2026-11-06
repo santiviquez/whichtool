@@ -29,8 +29,10 @@ The harness calls the Anthropic and OpenAI Python SDKs directly, so the request 
 - Nothing carries over between calls: no conversation ids, no `previous_response_id`, `store: false` on OpenAI.
 - Stated answers come back as structured output: `{"api", "reason", "sentence"}`, with `reason` one of accuracy, latency, cost, ease_of_integration, reputation, other.
 - No sampling parameters are set (none of these models accept them at these effort levels), so repeats use each vendor's default sampling.
-- Claude: adaptive thinking with summarized display, `output_config.effort` and `output_config.format` (JSON schema), streamed so long reasoning doesn't hit HTTP timeouts. OpenAI: the Responses API with `reasoning.effort`, `reasoning.summary: auto` and a strict JSON schema.
-- The SDKs retry rate limits, server errors and dropped connections (6 retries, 20-minute timeout). A call that still fails is recorded as `api_error` and the run goes on.
+- Claude: adaptive thinking with summarized display, `output_config.effort` and `output_config.format` (JSON schema). OpenAI: the Responses API with `reasoning.effort`, `reasoning.summary: auto` and a strict JSON schema. Both stream, so a long answer never sits on an idle connection until a timeout.
+- Every call may use the model's full output limit (128K tokens on all four), so an answer is only cut off where the model itself would stop. The limit is a ceiling: only tokens used are billed.
+- Before anything is spent, a pre-flight check looks up every model with its vendor's models endpoint (free), which catches a bad key or model id.
+- The SDKs retry rate limits, server errors and dropped connections (6 retries, 20-minute timeout). A call that still fails is recorded as `api_error` and the run goes on. An error that would repeat on every call of a configuration (a rejected request, a bad key or model id, no credits) stops that configuration; its remaining calls stay open for `--resume`.
 - The first Ctrl-C stops new calls and lets the running ones finish and be written; a second one quits at once. `--resume <run_id>` then runs every call of that run that has no successful row yet (failed, skipped for budget, or never started), appending to the same files. A run can only be resumed if the task's prompts and the experiment settings in `config.py` are unchanged.
 - Claude refusal fallbacks are left off on purpose: a fallback would silently answer with a different model.
 
@@ -96,6 +98,7 @@ The scorer maps each answer to a canonical API id through `aliases.yaml` (names 
 | `off_list` | an API outside the comparison, or a self-hosted tool | miss | miss |
 | `hedge` | more than one API, or "it depends" | miss | miss |
 | `refusal` | the model declined | miss | miss |
+| `truncated` | no answer: the model used its whole output limit, or Claude's search was still running after the last continuation | miss | miss |
 | `format_error` | the answer could not be parsed, or no code was written | miss | miss |
 | `api_error` | the call failed after all retries | not scored | not scored |
 | `unmapped` | no alias matched yet; fix the alias table and rescore | miss | miss |
@@ -106,7 +109,7 @@ The report covers the three pre-registered comparisons (each configuration's acc
 
 ## Budget guard
 
-`results/` is the ledger: before a run starts, the harness adds up `cost_usd` over every `calls.csv` and refuses to spend past $100 in total (or past $5 across probe runs). A call that started (its id is in `started.txt`) but never reached `calls.csv`, because the process was killed, is counted at `RESERVE_USD`, so the ledger never forgets money that may have been spent. During a run, a call only starts if the money already spent plus `RESERVE_USD` for every call in flight stays under the cap; otherwise it is recorded as `skipped_budget`. Set `RESERVE_USD` from the probe: `estimate.py` prints the most expensive probe call. Cost is computed from the token counts in each raw response at the list prices in [`whichtool/config.py`](whichtool/config.py), plus $10 per 1,000 web searches. A spend limit in each vendor's console is a good backstop.
+`results/` is the ledger: before a run starts, the harness adds up `cost_usd` over every `calls.csv` and refuses to spend past $100 in total (or past $5 across probe runs). During a run, a call only starts if the money already spent plus an amount set aside for every running call stays under the cap; otherwise it is recorded as `skipped_budget`. The amount set aside for a call is the most expensive successful call seen so far for its configuration (from the probe or an earlier run), or `RESERVE_USD` ($0.30) before there is one. A call that started (its id is in `started.txt`) but never reached `calls.csv`, because the process was killed, is counted at its set-aside amount, so the ledger never forgets money that may have been spent. Cost is computed from the token counts in each raw response at the list prices in [`whichtool/config.py`](whichtool/config.py), plus $10 per 1,000 web searches. A spend limit in each vendor's console is a good backstop.
 
 ## Adding a task
 

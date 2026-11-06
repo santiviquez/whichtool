@@ -145,3 +145,10 @@ def test_code_ignores_comments_prose_and_helpers(table):
     t = AliasTable({**ALIASES, "pymupdf": {"code": ["import fitz"], "hosted": False}})
     out = classify(r, text, t, GT)
     assert out["status"] == "correct", out
+
+
+def test_cut_off_answers_are_truncated_not_format_errors(table):
+    for stop in ("max_tokens", "pause_turn", "incomplete:max_output_tokens"):
+        out = classify(row("", parse_ok="False", stop_reason=stop), "", table, GT)
+        assert out["status"] == "truncated" and out["strict_correct"] == 0
+    assert classify(row("", parse_ok="False", stop_reason="end_turn"), "", table, GT)["status"] == "format_error"

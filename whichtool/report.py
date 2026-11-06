@@ -19,7 +19,7 @@ from pathlib import Path
 from .config import EFFORTS, MODELS, RESULTS_DIR
 from .stats import clustered_mean_ci, mean_pass_hat_k, paired_diff_ci
 
-MISS_STATUSES = ["wrong", "off_list", "hedge", "refusal", "format_error", "unmapped"]
+MISS_STATUSES = ["wrong", "off_list", "hedge", "refusal", "truncated", "format_error", "unmapped"]
 # Failed calls are not misses: they are left out of accuracy and shown on their own.
 ERROR_STATUSES = ["api_error", "record_error"]
 
@@ -100,7 +100,7 @@ def group(rows: list[dict], study: str) -> dict[tuple[str, str], list[dict]]:
 def accuracy_table(groups: dict, epochs_k: int) -> list[str]:
     out = [
         "| Model | Effort | Scored runs | Strict accuracy (95% CI) | Lenient accuracy | "
-        f"pass^{epochs_k} | Misses: wrong / off-list / hedge / refusal / format / unmapped | "
+        f"pass^{epochs_k} | Misses: wrong / off-list / hedge / refusal / cut off / format / unmapped | "
         "Failed calls (not scored) | Mean output tokens | Mean cost | Cost per correct |",
         "|---|---|---|---|---|---|---|---|---|---|---|",
     ]

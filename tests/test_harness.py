@@ -5,6 +5,7 @@ import csv
 import json
 
 import pytest
+from types import SimpleNamespace
 
 from anthropic.types import Message
 from openai.types.responses import Response
@@ -60,7 +61,7 @@ class FakeOpenAI:
 
     async def create(self, **req):
         self.requests.append(req)
-        return Response.model_validate({
+        final = Response.model_validate({
             "id": "resp_1", "object": "response", "created_at": 0, "model": "gpt-6-astra",
             "status": "completed", "parallel_tool_calls": True, "tool_choice": "auto", "tools": [],
             "output": [
@@ -75,15 +76,22 @@ class FakeOpenAI:
                       "output_tokens_details": {"reasoning_tokens": 30}, "total_tokens": 150},
         })
 
+        async def events():  # stream=True: the last event carries the whole response
+            yield SimpleNamespace(type="response.created", response=None)
+            yield SimpleNamespace(type="response.completed", response=final)
+
+        assert req.get("stream") is True
+        return events()
+
 
 def _run(tmp_path, clients, model="opus-5.5", study="headline", epochs=2,
          allowed_usd=10.0, reserve_usd=0.0):
     task = load_task("example")
     writer = RunWriter(run_dir=tmp_path, run_id="test", run_kind="study", task_name=task.name,
-                       variants_sha=task.variants_sha, allowed_usd=allowed_usd,
-                       reserve_usd=reserve_usd)
+                       variants_sha=task.variants_sha, allowed_usd=allowed_usd)
     plan = [Config(STUDIES[study], MODELS[model], "high", task.variants, epochs)]
-    asyncio.run(run_plan(clients, task, plan, writer))
+    reserves = {(study, model, "high"): reserve_usd}
+    asyncio.run(run_plan(clients, task, plan, writer, reserves=reserves))
     rows = list(csv.DictReader((tmp_path / "calls.csv").open()))
     raw_path = tmp_path / "raw.jsonl"
     raws = [json.loads(line) for line in raw_path.open()] if raw_path.exists() else []
@@ -101,8 +109,10 @@ def test_rows_and_raw_written(tmp_path):
     assert len({r["call_id"] for r in rows}) == 4
     # Opus 5.5 at $4 / $20: 100 in + 50 out
     assert float(rows[0]["cost_usd"]) == (100 * 4 + 50 * 20) / 1e6
-    # the stored request is exactly what the client received
-    assert raws[0]["request"] in fake.requests
+    # the stored request is what the client received (the stream helper adds "stream": true
+    # itself; test_wire checks it reaches the wire)
+    sent = {k: v for k, v in raws[0]["request"].items() if k != "stream"}
+    assert sent in fake.requests and raws[0]["request"]["stream"] is True
     assert raws[0]["request"]["system"].startswith("Recommend the one hosted API")
     assert w.n_written == 4 and w.n_errors == 0
 
@@ -143,7 +153,7 @@ def test_pause_turn_is_continued(tmp_path):
     fake = FakeAnthropic([paused, done])
     task = load_task("example")
     writer = RunWriter(run_dir=tmp_path, run_id="t", run_kind="study", task_name=task.name,
-                       variants_sha="", allowed_usd=10, reserve_usd=0)
+                       variants_sha="", allowed_usd=10)
     plan = [Config(STUDIES["search"], MODELS["opus-5.5"], "high", task.variants[:1], 1)]
     asyncio.run(run_plan({"anthropic": fake}, task, plan, writer))
     row = next(csv.DictReader((tmp_path / "calls.csv").open()))
@@ -204,7 +214,7 @@ def test_resume_reruns_only_unfinished_calls(tmp_path):
 
     def writer():
         return RunWriter(run_dir=tmp_path, run_id="r", run_kind="study", task_name=task.name,
-                         variants_sha="", allowed_usd=10, reserve_usd=0)
+                         variants_sha="", allowed_usd=10)
 
     # first session: one call fails
     fake = FlakyAnthropic(n_fail=1)
@@ -227,7 +237,7 @@ def test_resume_reruns_only_unfinished_calls(tmp_path):
 def test_stopping_starts_nothing_new(tmp_path):
     task = load_task("example")
     w = RunWriter(run_dir=tmp_path, run_id="r", run_kind="study", task_name=task.name,
-                  variants_sha="", allowed_usd=10, reserve_usd=0)
+                  variants_sha="", allowed_usd=10)
     w.stopping = True
     fake = FakeAnthropic()
     plan = [Config(STUDIES["headline"], MODELS["opus-5.5"], "high", task.variants, 1)]
@@ -250,15 +260,86 @@ def test_ledger_counts_calls_that_started_but_were_never_written(tmp_path):
 
 
 def test_every_request_setting_comes_from_config(monkeypatch):
+    from dataclasses import replace
+
     from whichtool import config
 
-    monkeypatch.setitem(config.MAX_TOKENS, "high", 1234)
     monkeypatch.setattr(config, "CLAUDE_THINKING", {"type": "adaptive", "display": "omitted"})
     monkeypatch.setattr(config, "OPENAI_REASONING_SUMMARY", "detailed")
-    claude = build_request(MODELS["opus-5.5"], STUDIES["headline"], "high", "i", "t")
+    opus = replace(MODELS["opus-5.5"], max_output_tokens=1234)
+    claude = build_request(opus, STUDIES["headline"], "high", "i", "t")
     gpt = build_request(MODELS["gpt-6-astra"], STUDIES["headline"], "high", "i", "t")
     assert claude["max_tokens"] == 1234 and claude["thinking"]["display"] == "omitted"
-    assert gpt["max_output_tokens"] == 1234 and gpt["reasoning"]["summary"] == "detailed"
+    assert gpt["max_output_tokens"] == 128_000 and gpt["reasoning"]["summary"] == "detailed"
+    assert claude["stream"] is True and gpt["stream"] is True  # the saved request says how it was sent
     snap = json.loads(json.dumps(config.snapshot()))  # run.json gets all of it
-    assert snap["experiment"]["max_tokens"]["high"] == 1234
+    assert snap["experiment"]["models"]["opus-5.5"]["max_output_tokens"] == 128_000
     assert snap["execution"]["max_connections"] == config.MAX_CONNECTIONS
+
+
+class RejectingAnthropic(FakeAnthropic):
+    """Every call fails with a 400, like a request the API will never accept."""
+
+    def stream(self, **req):
+        import anthropic
+        import httpx2
+
+        self.requests.append(req)
+        response = httpx2.Response(400, request=httpx2.Request("POST", "https://api.anthropic.com/v1/messages"))
+        error = anthropic.BadRequestError("output_config.format is not supported with this tool", response=response,
+                                          body=None)
+
+        class _Failing:
+            async def __aenter__(self):
+                raise error
+
+            async def __aexit__(self, *exc):
+                return False
+
+        return _Failing()
+
+
+def test_a_rejected_request_stops_its_configuration(tmp_path):
+    fake = RejectingAnthropic()
+    task = load_task("example")
+    w = RunWriter(run_dir=tmp_path, run_id="r", run_kind="study", task_name=task.name, variants_sha="",
+                  allowed_usd=10)
+    plan = [Config(STUDIES["search"], MODELS["opus-5.5"], "high", task.variants, 3)]
+    asyncio.run(run_plan({"anthropic": fake}, task, plan, w, max_connections=1))
+    assert len(fake.requests) == 1  # the other 5 calls were never sent
+    assert list(w.broken) == [("search", "opus-5.5", "high")]
+    rows = list(csv.DictReader((tmp_path / "calls.csv").open()))
+    assert len(rows) == 1 and rows[0]["status"] == "api_error"  # the rest stay open for --resume
+
+
+def test_money_set_aside_per_configuration(tmp_path):
+    # a configuration whose calls cost $4 each may not start under a $3 cap; a $0.01 one may
+    task = load_task("example")
+    w = RunWriter(run_dir=tmp_path, run_id="r", run_kind="study", task_name=task.name, variants_sha="",
+                  allowed_usd=3)
+    plan = [Config(STUDIES["headline"], MODELS["fable-5.1"], "xhigh", task.variants, 1),
+            Config(STUDIES["headline"], MODELS["opus-5.5"], "medium", task.variants, 1)]
+    reserves = {("headline", "fable-5.1", "xhigh"): 4.0, ("headline", "opus-5.5", "medium"): 0.01}
+    asyncio.run(run_plan({"anthropic": FakeAnthropic()}, task, plan, w, reserves=reserves))
+    rows = list(csv.DictReader((tmp_path / "calls.csv").open()))
+    assert {(r["model"], r["status"]) for r in rows} == {("fable-5.1", "skipped_budget"), ("opus-5.5", "ok")}
+
+
+def test_reserves_come_from_the_most_expensive_earlier_call(tmp_path):
+    from whichtool.run import observed_reserves
+
+    _run(tmp_path / "run1", {"anthropic": FakeAnthropic()}, epochs=1)
+    assert observed_reserves(tmp_path) == {("headline", "opus-5.5", "high"): (100 * 4 + 50 * 20) / 1e6}
+
+
+def test_preflight_reports_unknown_models():
+    from whichtool.harness import preflight
+
+    class Models:
+        async def retrieve(self, model_id):
+            if model_id != "claude-opus-5-5":
+                raise RuntimeError("model not found")
+
+    client = SimpleNamespace(models=Models())
+    errors = asyncio.run(preflight({"anthropic": client}, [MODELS["opus-5.5"], MODELS["fable-5.1"]]))
+    assert list(errors) == ["fable-5.1"]

@@ -18,7 +18,7 @@ import json
 import signal
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -48,7 +48,8 @@ def build_request(
             output_config["format"] = {"type": "json_schema", "schema": C.ANSWER_SCHEMA}
         req = {
             "model": spec.api_id,
-            "max_tokens": C.MAX_TOKENS[effort],
+            "max_tokens": spec.max_output_tokens,
+            "stream": True,
             "system": instruction,
             "messages": [{"role": "user", "content": text}],
             "thinking": dict(C.CLAUDE_THINKING),
@@ -63,8 +64,9 @@ def build_request(
         "instructions": instruction,
         "input": text,
         "reasoning": {"effort": effort, "summary": C.OPENAI_REASONING_SUMMARY},
-        "max_output_tokens": C.MAX_TOKENS[effort],
+        "max_output_tokens": spec.max_output_tokens,
         "store": False,
+        "stream": True,
     }
     if structured:
         req["text"] = {
@@ -76,18 +78,27 @@ def build_request(
     return req
 
 
+class CallFailed(Exception):
+    """The vendor returned a failed response; keeps what came back for raw.jsonl."""
+
+    def __init__(self, message: str, responses: list[dict]):
+        super().__init__(message)
+        self.responses = responses
+
+
 async def send(client: Any, vendor: str, req: dict[str, Any]) -> tuple[list[dict], str]:
     """Send one request. Returns the raw response of every API call it took, and the answer text.
 
-    Anthropic calls stream (long reasoning at high max_tokens would otherwise hit
-    HTTP timeouts) and continue after pause_turn. OpenAI calls are one request.
+    Both vendors stream, so a long answer never sits on an idle connection
+    until a timeout. Claude calls continue after pause_turn.
     """
     if vendor == "anthropic":
+        body = {k: v for k, v in req.items() if k != "stream"}  # the stream helper sets it
         responses: list[dict] = []
         so_far: list[Any] = []  # assistant content blocks of every paused turn
         for _ in range(C.CLAUDE_MAX_CONTINUATIONS + 1):
-            messages = req["messages"] + ([{"role": "assistant", "content": so_far}] if so_far else [])
-            async with client.messages.stream(**{**req, "messages": messages}) as stream:
+            messages = body["messages"] + ([{"role": "assistant", "content": so_far}] if so_far else [])
+            async with client.messages.stream(**{**body, "messages": messages}) as stream:
                 msg = await stream.get_final_message()
             responses.append(msg.to_dict())
             so_far += msg.content
@@ -96,8 +107,16 @@ async def send(client: Any, vendor: str, req: dict[str, Any]) -> tuple[list[dict
         text = "".join(b.text for b in so_far if b.type == "text")
         return responses, text
 
-    resp = await client.responses.create(**req)
-    return [resp.to_dict()], resp.output_text or ""
+    final = None
+    async for event in await client.responses.create(**req):
+        if event.type in ("response.completed", "response.incomplete", "response.failed"):
+            final = event.response
+    if final is None:
+        raise RuntimeError("the response stream ended without a final response")
+    responses = [final.to_dict()]
+    if final.status == "failed":
+        raise CallFailed(f"response failed: {final.error}", responses)
+    return responses, final.output_text or ""
 
 
 # -------------------------------------------------------------------- writer
@@ -109,9 +128,10 @@ class RunWriter:
     and enforces the run's spending cap. Everything runs on one event loop,
     so no locks are needed.
 
-    started.txt gets a call's id just before it is sent. A call that started
-    but never reached calls.csv (the process died) is counted by spent_so_far
-    at reserve_usd, so the ledger never forgets money that may have been spent.
+    started.txt gets a call's id and set-aside amount just before it is sent.
+    A call that started but never reached calls.csv (the process died) is
+    counted by spent_so_far at that amount, so the ledger never forgets money
+    that may have been spent.
     """
 
     run_dir: Path
@@ -120,13 +140,14 @@ class RunWriter:
     task_name: str
     variants_sha: str
     allowed_usd: float  # this run may spend at most this much
-    reserve_usd: float  # assumed cost of a call that is still in flight
     spent_usd: float = 0.0
     in_flight: int = 0
+    in_flight_usd: float = 0.0  # money set aside for running calls
     n_written: int = 0
     n_skipped: int = 0
     n_errors: int = 0
     stopping: bool = False  # set by Ctrl-C: start nothing new, finish what is running
+    broken: dict = field(default_factory=dict)  # configuration -> error that will repeat on every call
 
     def __post_init__(self) -> None:
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -137,25 +158,31 @@ class RunWriter:
             with self.calls_path.open("w", newline="") as f:
                 csv.DictWriter(f, fieldnames=CALLS_COLUMNS).writeheader()
 
-    async def acquire(self) -> bool:
-        """Wait for budget headroom. False means the budget is spent or the run is stopping."""
+    async def acquire(self, reserve: float) -> bool:
+        """Wait until `reserve` more fits under the cap. False means it never will, or the run is stopping."""
         while True:
             if self.stopping:
                 return False
-            if self.spent_usd + self.reserve_usd > self.allowed_usd:
+            if self.spent_usd + reserve > self.allowed_usd:
                 return False
-            if self.spent_usd + (self.in_flight + 1) * self.reserve_usd <= self.allowed_usd:
+            if self.spent_usd + self.in_flight_usd + reserve <= self.allowed_usd:
                 self.in_flight += 1
+                self.in_flight_usd += reserve
                 return True
             await asyncio.sleep(0.5)
 
-    def mark_started(self, call_id: str) -> None:
-        with self.started_path.open("a") as f:
-            f.write(call_id + "\n")
+    def release(self, reserve: float) -> None:
+        self.in_flight -= 1
+        self.in_flight_usd -= reserve
 
-    def write(self, row: dict[str, Any], raw: dict[str, Any] | None, acquired: bool) -> None:
-        if acquired:
-            self.in_flight -= 1
+    def mark_started(self, call_id: str, reserve: float) -> None:
+        with self.started_path.open("a") as f:
+            f.write(f"{call_id},{reserve:.6f}\n")
+
+    def write(self, row: dict[str, Any], raw: dict[str, Any] | None, reserve: float | None) -> None:
+        """reserve is what acquire() set aside for this call, or None if it never started."""
+        if reserve is not None:
+            self.release(reserve)
         self.spent_usd += float(row.get("cost_usd") or 0)
         if row.get("status") == "skipped_budget":
             self.n_skipped += 1
@@ -183,6 +210,19 @@ class Config:
     epochs: int
 
 
+# Errors that will repeat on every call of a configuration: a rejected
+# request, a bad key or model id, or an account with no credits.
+_FATAL_STATUS = {400, 401, 403, 404, 422}
+
+
+def is_fatal(e: Exception) -> bool:
+    return getattr(e, "status_code", None) in _FATAL_STATUS or getattr(e, "code", None) == "insufficient_quota"
+
+
+def config_key(cfg: Config) -> tuple[str, str, str]:
+    return (cfg.study.name, cfg.spec.label, cfg.effort)
+
+
 async def run_call(
     client: Any,
     task: TaskSpec,
@@ -190,6 +230,7 @@ async def run_call(
     variant: Variant,
     epoch: int,
     writer: RunWriter,
+    reserve: float,
     schema: bool = C.STRUCTURED_OUTPUT,
 ) -> None:
     study, spec, effort = cfg.study, cfg.spec, cfg.effort
@@ -209,16 +250,21 @@ async def run_call(
         "effort": effort,
         "variants_sha": writer.variants_sha,
     }
-    if writer.stopping:
-        return  # left out entirely, so a resume runs it
-    if not await writer.acquire():
+    # Left out entirely (no row), so a resume runs it: the run is stopping, or
+    # an earlier call of this configuration hit an error that would repeat.
+    if writer.stopping or config_key(cfg) in writer.broken:
+        return
+    if not await writer.acquire(reserve):
         if not writer.stopping:
-            writer.write({**base, "status": "skipped_budget", "cost_usd": 0}, None, False)
+            writer.write({**base, "status": "skipped_budget", "cost_usd": 0}, None, None)
+        return
+    if config_key(cfg) in writer.broken:  # it broke while this call waited for budget
+        writer.release(reserve)
         return
 
     instruction = task.code_instruction if study.answer == "code" else task.answer_instruction
     req = build_request(spec, study, effort, instruction, variant.text, schema)
-    writer.mark_started(base["call_id"])
+    writer.mark_started(base["call_id"], reserve)
     started, t0 = _now(), time.monotonic()
     responses: list[dict] = []
     text, error = "", ""
@@ -226,6 +272,10 @@ async def run_call(
         responses, text = await send(client, spec.vendor, req)
     except Exception as e:  # the SDKs already retried; record the failure and move on
         error = f"{type(e).__name__}: {e}"
+        responses = getattr(e, "responses", [])
+        if is_fatal(e) and config_key(cfg) not in writer.broken:
+            writer.broken[config_key(cfg)] = error
+            print(f"\nStopping {' '.join(config_key(cfg))}: {error[:300]}", flush=True)
 
     try:
         row, raw = _record(base, spec, study, req, responses, text, error, started, t0)
@@ -233,7 +283,7 @@ async def run_call(
         row = {**base, "status": "record_error", "started_at": started, "finished_at": _now(),
                "error": f"{error} | record: {type(e).__name__}: {e}"}
         raw = {**row, "request": req, "responses": responses, "output_text": text}
-    writer.write(row, raw, True)
+    writer.write(row, raw, reserve)
 
 
 def _record(base, spec, study, req, responses, text, error, started, t0):
@@ -309,15 +359,18 @@ async def run_plan(
     task: TaskSpec,
     plan: list[Config],
     writer: RunWriter,
+    reserves: dict[tuple[str, str, str], float] | None = None,
     max_connections: int = C.MAX_CONNECTIONS,
     schema: bool = C.STRUCTURED_OUTPUT,
     skip: set[Slot] = frozenset(),
 ) -> None:
     """Run every call of the plan except the slots in skip, at most max_connections at once per model.
 
-    The first Ctrl-C stops new calls and lets the running ones finish and be
-    written; the second quits at once.
+    reserves gives the money set aside per call of each configuration
+    (default RESERVE_USD). The first Ctrl-C stops new calls and lets the
+    running ones finish and be written; the second quits at once.
     """
+    reserves = reserves or {}
     limits = {cfg.spec.label: asyncio.Semaphore(max_connections) for cfg in plan}
     loop = asyncio.get_running_loop()
 
@@ -334,7 +387,8 @@ async def run_plan(
 
     async def one(cfg: Config, variant: Variant, epoch: int) -> None:
         async with limits[cfg.spec.label]:
-            await run_call(clients[cfg.spec.vendor], task, cfg, variant, epoch, writer, schema)
+            reserve = reserves.get(config_key(cfg), C.RESERVE_USD)
+            await run_call(clients[cfg.spec.vendor], task, cfg, variant, epoch, writer, reserve, schema)
 
     try:
         await asyncio.gather(*(one(c, v, e) for c, v, e in slots(plan) if slot_key(c, v, e) not in skip))
@@ -343,6 +397,18 @@ async def run_plan(
             loop.remove_signal_handler(signal.SIGINT)
         except (NotImplementedError, RuntimeError, ValueError):
             pass
+
+
+async def preflight(clients: dict[str, Any], specs: list[ModelSpec]) -> dict[str, str]:
+    """Look up every model with its vendor's models endpoint: free, and catches a
+    bad key or a wrong model id before any money is spent. Returns label -> error."""
+    errors: dict[str, str] = {}
+    for spec in specs:
+        try:
+            await clients[spec.vendor].models.retrieve(spec.api_id)
+        except Exception as e:
+            errors[spec.label] = f"{type(e).__name__}: {e}"
+    return errors
 
 
 def make_clients(
