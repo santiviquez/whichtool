@@ -6,13 +6,13 @@ Examples:
     python -m whichtool.run --task doc-processing --study search --models gpt-6-astra
 
 Every call is appended to results/<task>/<run_id>/calls.csv and raw.jsonl as
-soon as it finishes. Inspect's own logs go to results/<task>/<run_id>/inspect-logs
-(open them with `inspect view --log-dir ...`).
+soon as it finishes.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import csv
 import json
 import os
@@ -29,6 +29,7 @@ from .config import (
     RESULTS_DIR,
     STUDIES,
 )
+from .harness import Config, RunWriter, make_clients, run_plan
 from .taskspec import load_task
 
 # The cloud environment reserves ANTHROPIC_API_KEY for Claude Code's own
@@ -126,8 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     if not variants:
         sys.exit("No variants selected. Has the task got jobs.yaml?")
 
-    # ---- plan: list of (study, model spec, effort, variants, epochs)
-    plan = []
+    plan: list[Config] = []
     if args.probe:
         # 2 calls per configuration: the original text of two different jobs,
         # or one job twice if there is only one.
@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
         for study in STUDIES.values():
             for spec in specs:
                 for effort in study.efforts:
-                    plan.append((study, spec, effort, probe_variants, probe_epochs))
+                    plan.append(Config(study, spec, effort, probe_variants, probe_epochs))
         run_kind = "probe"
         cap = PROBE_BUDGET_USD - spent_so_far(kind="probe")
     else:
@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         efforts = args.efforts.split(",") if args.efforts else list(study.efforts)
         for spec in specs:
             for effort in efforts:
-                plan.append((study, spec, effort, variants, args.epochs))
+                plan.append(Config(study, spec, effort, variants, args.epochs))
         run_kind = "study"
         cap = float("inf")
 
@@ -158,20 +158,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.max_usd is not None:
         allowed = min(allowed, args.max_usd)
 
-    n_calls = sum(len(v) * e for _, _, _, v, e in plan)
+    n_calls = sum(len(c.variants) * c.epochs for c in plan)
     print(f"Task {task.name} | {run_kind} | {len(plan)} configurations | {n_calls} calls planned")
-    for study, spec, effort, v, e in plan:
-        print(f"  {study.name:9s} {spec.label:12s} {effort:6s} {len(v)} variants x {e} epochs")
+    for c in plan:
+        print(f"  {c.study.name:9s} {c.spec.label:12s} {c.effort:6s} "
+              f"{len(c.variants)} variants x {c.epochs} epochs")
     print(f"Spent so far ${total_spent:.2f} of ${BUDGET_USD:.0f}; this run may spend up to ${allowed:.2f}")
     if args.dry_run:
         return 0
     if allowed <= 0:
         sys.exit("No budget left for this run.")
-
-    # Deferred import: Inspect is slow to import and not needed for --dry-run.
-    from inspect_ai import eval as inspect_eval
-
-    from .harness import RunWriter, build_task
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_id = f"{stamp}-{run_kind if args.probe else args.study}"
@@ -185,7 +181,8 @@ def main(argv: list[str] | None = None) -> int:
         allowed_usd=allowed,
         reserve_usd=args.reserve_usd,
     )
-    import inspect_ai
+    import anthropic
+    import openai
 
     (run_dir / "run.json").write_text(
         json.dumps(
@@ -196,44 +193,36 @@ def main(argv: list[str] | None = None) -> int:
                 "variants_sha": task.variants_sha,
                 "variants_frozen": task.variants_frozen,
                 "git_commit": git_commit(),
-                "inspect_ai_version": inspect_ai.__version__,
+                "anthropic_sdk_version": anthropic.__version__,
+                "openai_sdk_version": openai.__version__,
                 "started_at": datetime.now(timezone.utc).isoformat(),
                 "allowed_usd": allowed,
                 "label": args.label,
                 "structured_output": not args.no_schema,
                 "plan": [
                     {
-                        "study": s.name,
-                        "model": m.label,
-                        "model_id": m.api_id,
-                        "effort": e,
-                        "variants": [x.id for x in v],
-                        "epochs": ep,
+                        "study": c.study.name,
+                        "model": c.spec.label,
+                        "model_id": c.spec.api_id,
+                        "effort": c.effort,
+                        "variants": [v.id for v in c.variants],
+                        "epochs": c.epochs,
                     }
-                    for s, m, e, v, ep in plan
+                    for c in plan
                 ],
             },
             indent=2,
         )
     )
 
-    tasks = [
-        build_task(task, study, spec, effort, v, e, writer,
-                   max_connections=args.max_connections, schema=not args.no_schema)
-        for study, spec, effort, v, e in plan
-    ]
-    inspect_eval(
-        tasks,
-        log_dir=str(run_dir / "inspect-logs"),
-        max_tasks=len(tasks),
-        log_model_api=True,
-        fail_on_error=0.2,
-        score=False,
-        display="plain",
+    clients = make_clients({c.spec.vendor for c in plan})
+    asyncio.run(
+        run_plan(clients, task, plan, writer, max_connections=args.max_connections,
+                 schema=not args.no_schema)
     )
     print(
-        f"\nRun {run_id}: {writer.n_written} calls written, {writer.n_skipped} skipped for budget, "
-        f"${writer.spent_usd:.2f} spent. Files in {run_dir}"
+        f"\nRun {run_id}: {writer.n_written} calls written ({writer.n_errors} errors), "
+        f"{writer.n_skipped} skipped for budget, ${writer.spent_usd:.2f} spent. Files in {run_dir}"
     )
     return 0
 

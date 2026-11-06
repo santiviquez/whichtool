@@ -14,12 +14,14 @@ Everything is public: prompts, every request and response, scores and the report
 
 ## How a run works
 
-The harness is a thin layer on [Inspect AI](https://inspect.aisi.org.uk/). Every (model, effort) pair is one Inspect task; every sample is one stateless API call:
+The harness calls the Anthropic and OpenAI Python SDKs directly, so the request saved for each call is exactly what was sent. Every (study, model, effort) is one configuration; every call is one stateless API call:
 
 - The system message is one fixed answer instruction, the same for every model ([`whichtool/prompts.py`](whichtool/prompts.py)). The job text is the user message. No persona, no history, no memory.
 - Nothing carries over between calls: no conversation ids, no `previous_response_id`, `store: false` on OpenAI.
 - Stated answers come back as structured output: `{"api", "reason", "sentence"}`, with `reason` one of accuracy, latency, cost, ease_of_integration, reputation, other.
 - No sampling parameters are set (none of these models accept them at these effort levels), so repeats use each vendor's default sampling.
+- Claude: adaptive thinking with summarized display, `output_config.effort` and `output_config.format` (JSON schema), streamed so long reasoning doesn't hit HTTP timeouts. OpenAI: the Responses API with `reasoning.effort`, `reasoning.summary: auto` and a strict JSON schema.
+- The SDKs retry rate limits, server errors and dropped connections (6 retries, 20-minute timeout). A call that still fails is recorded as `api_error` and the run goes on.
 - Claude refusal fallbacks are left off on purpose: a fallback would silently answer with a different model.
 
 As soon as a call finishes it is appended to two files in `results/<task>/<run_id>/`:
@@ -28,10 +30,9 @@ As soon as a call finishes it is appended to two files in `results/<task>/<run_i
 |---|---|
 | `calls.csv` | One flat row per call: ids, study, job, variant, epoch, model requested and returned, effort, the answer fields, whether it searched, tokens, cost, latency, errors |
 | `raw.jsonl` | The same plus the full prompt, the exact request and raw response of every API call, reasoning summaries, search queries and cited URLs |
-| `run.json` | The plan, the git commit, the Inspect version and a hash of the prompts |
-| `inspect-logs/` | Inspect's own logs, for `inspect view --log-dir results/<task>/<run_id>/inspect-logs` |
+| `run.json` | The plan, the git commit, the SDK versions and a hash of the prompts |
 
-Scoring and reporting read only these files, so they can be rerun at any time without the harness or any API call.
+Scoring and reporting read only these files, so they can be rerun at any time without any API call.
 
 ## Setup
 
@@ -100,6 +101,7 @@ Create `tasks/<name>/` with `task.yaml`, `jobs.yaml`, `variants.yaml`, `aliases.
 
 ## Notes on vendor differences
 
-- In the search study, Inspect's native Anthropic web search also gives Claude a web fetch tool; OpenAI's web search tool can open pages itself. Both are each vendor's own search, as designed.
+- In the search study, Claude gets its web search tool only (`web_search_20260209`, which can filter results with code) and no separate page-fetch tool; OpenAI's web search tool can open pages itself. Both are each vendor's own search, as designed.
+- Claude's search runs a server-side loop that can stop with `pause_turn`; the harness sends the turn back so it continues (up to 5 times), and the usage of every request is added up for the call.
 - Claude models return summarized thinking and OpenAI models return reasoning summaries; both are saved in `raw.jsonl` for error analysis and billed the same either way.
 - GPT-5.6 Sol's $4 / $20 price is promotional through at least 2026-11-21; runs after that need the price in `config.py` updated.

@@ -5,10 +5,10 @@ description = "Benchmark: how often do frontier models pick the best tool for a 
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "inspect-ai>=0.3.287",
     "anthropic>=2.4.0",
     "openai>=3.42.1",
     "pyyaml>=6.0",
+    "scipy>=1.18",
 ]
 
 [project.optional-dependencies]

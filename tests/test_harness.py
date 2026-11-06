@@ -1,62 +1,169 @@
-"""End to end through Inspect with its mock model: no API calls, no cost."""
+"""End to end with fake SDK clients: no API calls, no cost."""
 
+import asyncio
 import csv
 import json
 
-from inspect_ai import eval as inspect_eval
-from inspect_ai.model import ModelOutput, get_model
+from anthropic.types import Message
+from openai.types.responses import Response
 
-from whichtool.config import STUDIES, ModelSpec
-from whichtool.harness import RunWriter, build_task
+from whichtool.config import MODELS, STUDIES
+from whichtool.harness import Config, RunWriter, build_request, run_plan
 from whichtool.taskspec import load_task
 
-MOCK = ModelSpec("mock", "mockllm", "model", 1.0, 1.0, 1.0, 1.0)
+ANSWER = '{"api": "Postmark", "reason": "latency", "sentence": "Fastest delivery."}'
+USAGE = {"input_tokens": 100, "output_tokens": 50}
 
 
-def _run(tmp_path, allowed_usd=10.0, reserve_usd=0.0, outputs=None):
+def claude_msg(content, stop_reason="end_turn", **usage):
+    return Message.model_validate({
+        "id": "msg_1", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
+        "content": content, "stop_reason": stop_reason, "stop_sequence": None,
+        "usage": {**USAGE, **usage},
+    })
+
+
+class FakeAnthropic:
+    """Answers each stream() call with the next message in the list (the last one repeats)."""
+
+    def __init__(self, messages=None, error=None):
+        self.messages = self
+        self.queue = list(messages or [claude_msg([{"type": "text", "text": ANSWER}])])
+        self.error = error
+        self.requests = []
+
+    def stream(self, **req):
+        self.requests.append(req)
+        fake = self
+
+        class _Stream:
+            async def __aenter__(self):
+                if fake.error:
+                    raise fake.error
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def get_final_message(self):
+                return fake.queue.pop(0) if len(fake.queue) > 1 else fake.queue[0]
+
+        return _Stream()
+
+
+class FakeOpenAI:
+    def __init__(self):
+        self.responses = self
+        self.requests = []
+
+    async def create(self, **req):
+        self.requests.append(req)
+        return Response.model_validate({
+            "id": "resp_1", "object": "response", "created_at": 0, "model": "gpt-6-astra",
+            "status": "completed", "parallel_tool_calls": True, "tool_choice": "auto", "tools": [],
+            "output": [
+                {"type": "web_search_call", "id": "ws_1", "status": "completed",
+                 "action": {"type": "search", "query": "email api latency",
+                            "sources": [{"type": "url", "url": "https://example.com"}]}},
+                {"type": "message", "id": "m_1", "role": "assistant", "status": "completed",
+                 "content": [{"type": "output_text", "text": ANSWER, "annotations": []}]},
+            ],
+            "usage": {"input_tokens": 100, "output_tokens": 50,
+                      "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
+                      "output_tokens_details": {"reasoning_tokens": 30}, "total_tokens": 150},
+        })
+
+
+def _run(tmp_path, clients, model="opus-5.5", study="headline", epochs=2,
+         allowed_usd=10.0, reserve_usd=0.0):
     task = load_task("example")
-    variants = task.variants
-    writer = RunWriter(
-        run_dir=tmp_path,
-        run_id="test",
-        run_kind="study",
-        task_name=task.name,
-        variants_sha=task.variants_sha,
-        allowed_usd=allowed_usd,
-        reserve_usd=reserve_usd,
-    )
-    content = '{"api": "Postmark", "reason": "latency", "sentence": "Fastest delivery."}'
-    model = get_model(
-        "mockllm/model",
-        custom_outputs=outputs
-        or [ModelOutput.from_content(model="mockllm/model", content=content) for _ in range(10)],
-    )
-    t = build_task(task, STUDIES["headline"], MOCK, "medium", variants, 2, writer)
-    t.model = model
-    inspect_eval(t, log_dir=str(tmp_path / "logs"), display="none", score=False)
-    return writer
+    writer = RunWriter(run_dir=tmp_path, run_id="test", run_kind="study", task_name=task.name,
+                       variants_sha=task.variants_sha, allowed_usd=allowed_usd,
+                       reserve_usd=reserve_usd)
+    plan = [Config(STUDIES[study], MODELS[model], "high", task.variants, epochs)]
+    asyncio.run(run_plan(clients, task, plan, writer))
+    rows = list(csv.DictReader((tmp_path / "calls.csv").open()))
+    raw_path = tmp_path / "raw.jsonl"
+    raws = [json.loads(line) for line in raw_path.open()] if raw_path.exists() else []
+    return writer, rows, raws
 
 
 def test_rows_and_raw_written(tmp_path):
-    w = _run(tmp_path)
-    rows = list(csv.DictReader((tmp_path / "calls.csv").open()))
-    raws = [json.loads(line) for line in (tmp_path / "raw.jsonl").open()]
+    fake = FakeAnthropic()
+    w, rows, raws = _run(tmp_path, {"anthropic": fake})
     assert len(rows) == 4 == len(raws)  # 2 variants x 2 epochs
     assert {r["variant_id"] for r in rows} == {"j1-v00", "j1-v01"}
     assert {r["epoch"] for r in rows} == {"1", "2"}
     assert all(r["api"] == "Postmark" and r["parse_ok"] == "True" for r in rows)
-    assert all(r["status"] == "ok" for r in rows)
-    # the full prompt is stored, not an attachment reference
-    assert raws[0]["messages"][0]["content"].startswith("Recommend the one hosted API")
-    assert "attachment://" not in json.dumps(raws[0]["messages"])
+    assert all(r["status"] == "ok" and r["model_returned"] == "claude-opus-5-5" for r in rows)
     assert len({r["call_id"] for r in rows}) == 4
-    assert w.n_written == 4
+    # Opus 5.5 at $4 / $20: 100 in + 50 out
+    assert float(rows[0]["cost_usd"]) == (100 * 4 + 50 * 20) / 1e6
+    # the stored request is exactly what the client received
+    assert raws[0]["request"] in fake.requests
+    assert raws[0]["request"]["system"].startswith("Recommend the one hosted API")
+    assert w.n_written == 4 and w.n_errors == 0
+
+
+def test_claude_request_shape():
+    spec, study = MODELS["fable-5.1"], STUDIES["search"]
+    req = build_request(spec, study, "high", "instr", "job text")
+    assert req["thinking"] == {"type": "adaptive", "display": "summarized"}
+    assert req["output_config"]["effort"] == "high"
+    assert req["output_config"]["format"]["type"] == "json_schema"
+    assert req["tools"] == [{"type": "web_search_20260209", "name": "web_search"}]  # no web_fetch
+    code = build_request(spec, STUDIES["code"], "high", "instr", "job text")
+    assert "format" not in code["output_config"] and "tools" not in code
+    no_schema = build_request(spec, study, "high", "instr", "job text", schema=False)
+    assert "format" not in no_schema["output_config"]
+
+
+def test_openai_request_and_search(tmp_path):
+    fake = FakeOpenAI()
+    _, rows, raws = _run(tmp_path, {"openai": fake}, model="gpt-6-astra", study="search", epochs=1)
+    req = fake.requests[0]
+    assert req["store"] is False and "previous_response_id" not in req
+    assert req["reasoning"] == {"effort": "high", "summary": "auto"}
+    assert req["text"]["format"]["strict"] is True
+    assert req["tools"] == [{"type": "web_search"}]
+    assert rows[0]["api"] == "Postmark" and rows[0]["searched"] == "True"
+    assert rows[0]["n_searches"] == "1" and rows[0]["reasoning_tokens"] == "30"
+    assert raws[0]["urls"] == ["https://example.com"]
+
+
+def test_pause_turn_is_continued(tmp_path):
+    paused = claude_msg(
+        [{"type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search",
+          "input": {"query": "transactional email api"}}],
+        stop_reason="pause_turn", server_tool_use={"web_search_requests": 1, "web_fetch_requests": 0},
+    )
+    done = claude_msg([{"type": "text", "text": ANSWER}])
+    fake = FakeAnthropic([paused, done])
+    task = load_task("example")
+    writer = RunWriter(run_dir=tmp_path, run_id="t", run_kind="study", task_name=task.name,
+                       variants_sha="", allowed_usd=10, reserve_usd=0)
+    plan = [Config(STUDIES["search"], MODELS["opus-5.5"], "high", task.variants[:1], 1)]
+    asyncio.run(run_plan({"anthropic": fake}, task, plan, writer))
+    row = next(csv.DictReader((tmp_path / "calls.csv").open()))
+    assert row["n_api_calls"] == "2" and row["api"] == "Postmark"
+    assert row["n_searches"] == "1" and row["search_queries"] == "transactional email api"
+    # the second request sends the paused turn back, with no extra user message
+    second = fake.requests[1]["messages"]
+    assert [m["role"] for m in second] == ["user", "assistant"]
+    # usage is summed over both calls: 200 in, 100 out, 1 search
+    assert float(row["cost_usd"]) == round((200 * 4 + 100 * 20) / 1e6 + 0.01, 6)
+
+
+def test_api_error_is_recorded(tmp_path):
+    w, rows, raws = _run(tmp_path, {"anthropic": FakeAnthropic(error=RuntimeError("boom"))}, epochs=1)
+    assert all(r["status"] == "api_error" and "boom" in r["error"] for r in rows)
+    assert float(rows[0]["cost_usd"]) == 0 and w.n_errors == 2
+    assert raws[0]["request"]["model"] == "claude-opus-5-5"
 
 
 def test_budget_guard_skips(tmp_path):
     # reserve > allowed: nothing may start
-    w = _run(tmp_path, allowed_usd=0.10, reserve_usd=1.0)
-    rows = list(csv.DictReader((tmp_path / "calls.csv").open()))
+    w, rows, raws = _run(tmp_path, {"anthropic": FakeAnthropic()}, allowed_usd=0.10, reserve_usd=1.0)
     assert w.n_written == 0 and w.n_skipped == 4
     assert all(r["status"] == "skipped_budget" for r in rows)
-    assert not (tmp_path / "raw.jsonl").exists()
+    assert raws == []

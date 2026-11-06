@@ -33,10 +33,6 @@ class ModelSpec:
     usd_cache_read: float  # per 1M cached input tokens
     usd_cache_write: float  # per 1M cache-write input tokens (Anthropic only)
 
-    @property
-    def inspect_id(self) -> str:
-        return f"{self.vendor}/{self.api_id}"
-
 
 # Prices checked 2026-11-02 (see the design doc's "Provider settings" table).
 # GPT-5.6 Sol's $4 / $20 is promotional through at least 2026-11-21.

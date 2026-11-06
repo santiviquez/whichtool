@@ -10,65 +10,20 @@ import math
 from collections import defaultdict
 from math import comb
 
-def _betacf(a: float, b: float, x: float) -> float:
-    """Continued fraction for the incomplete beta function (Numerical Recipes 6.4)."""
-    tiny, eps = 1e-300, 3e-14
-    qab, qap, qam = a + b, a + 1.0, a - 1.0
-    c, d = 1.0, 1.0 - qab * x / qap
-    d = 1.0 / (d if abs(d) > tiny else tiny)
-    h = d
-    for m in range(1, 300):
-        m2 = 2 * m
-        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
-        d = 1.0 + aa * d
-        d = 1.0 / (d if abs(d) > tiny else tiny)
-        c = 1.0 + aa / c
-        c = c if abs(c) > tiny else tiny
-        h *= d * c
-        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
-        d = 1.0 + aa * d
-        d = 1.0 / (d if abs(d) > tiny else tiny)
-        c = 1.0 + aa / c
-        c = c if abs(c) > tiny else tiny
-        delta = d * c
-        h *= delta
-        if abs(delta - 1.0) < eps:
-            break
-    return h
-
-
-def betainc(a: float, b: float, x: float) -> float:
-    """Regularized incomplete beta function I_x(a, b)."""
-    if x <= 0:
-        return 0.0
-    if x >= 1:
-        return 1.0
-    lbeta = math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b)
-    front = math.exp(lbeta + a * math.log(x) + b * math.log1p(-x))
-    if x < (a + 1) / (a + b + 2):
-        return front * _betacf(a, b, x) / a
-    return 1.0 - front * _betacf(b, a, 1 - x) / b
-
+from scipy.stats import t as student_t
 
 def t_p_two_sided(t: float, df: int) -> float:
     """Two-sided p-value of Student's t."""
     if df <= 0 or t != t:
         return float("nan")
-    return betainc(df / 2, 0.5, df / (df + t * t))
+    return float(2 * student_t.sf(abs(t), df))
 
 
 def t95(df: int) -> float:
-    """Two-sided 95% critical value of Student's t (bisection on the p-value)."""
+    """Two-sided 95% critical value of Student's t."""
     if df <= 0:
         return float("nan")
-    lo, hi = 0.0, 1000.0
-    for _ in range(100):
-        mid = (lo + hi) / 2
-        if t_p_two_sided(mid, df) > 0.05:
-            lo = mid
-        else:
-            hi = mid
-    return (lo + hi) / 2
+    return float(student_t.ppf(0.975, df))
 
 
 def clustered_mean_ci(values: list[float], clusters: list[str]) -> dict:

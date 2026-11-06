@@ -45,7 +45,6 @@ CALLS_COLUMNS = [
     "cost_usd",
     "latency_s",
     "n_api_calls",
-    "retries",
     "started_at",
     "finished_at",
     "variants_sha",
@@ -149,7 +148,9 @@ def extract_openai(resp: dict) -> dict[str, Any]:
     u = resp.get("usage") if isinstance(resp.get("usage"), dict) else {}
     x["input_tokens"] = int(u.get("input_tokens") or 0)
     x["output_tokens"] = int(u.get("output_tokens") or 0)
-    x["cache_read_tokens"] = int((u.get("input_tokens_details") or {}).get("cached_tokens") or 0)
+    details = u.get("input_tokens_details") or {}
+    x["cache_read_tokens"] = int(details.get("cached_tokens") or 0)
+    x["cache_write_tokens"] = int(details.get("cache_write_tokens") or 0)
     x["reasoning_tokens"] = int((u.get("output_tokens_details") or {}).get("reasoning_tokens") or 0)
     output = resp.get("output")
     for item in output if isinstance(output, list) else []:
@@ -211,8 +212,10 @@ def cost_usd(spec: ModelSpec, x: dict[str, Any]) -> float:
     """Cost of one answer from token usage and search count.
 
     Anthropic reports input_tokens excluding cache reads/writes; OpenAI
-    reports input_tokens including cached tokens. Reasoning tokens are part
-    of output_tokens for both vendors.
+    reports input_tokens including cached tokens. OpenAI cache writes stay
+    in the full-price input (usd_cache_write is 0 for OpenAI), which is the
+    conservative choice. Reasoning tokens are part of output_tokens for both
+    vendors.
     """
     cr, cw = x["cache_read_tokens"], x["cache_write_tokens"]
     if spec.vendor == "anthropic":
