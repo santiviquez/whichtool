@@ -820,6 +820,35 @@
         "headline gpt-6-astra xhigh": "APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/."
       },
       "calls_without_success_left": 374
+    },
+    {
+      "started_at": "2026-11-06T18:02:51.404398+00:00",
+      "git_commit": "da7896e",
+      "anthropic_sdk_version": "2.4.0",
+      "openai_sdk_version": "3.42.1",
+      "allowed_usd": 20.525836000000027,
+      "calls_to_make": 374,
+      "reserves_usd": {
+        "headline opus-5.5 medium": 0.017948,
+        "headline opus-5.5 high": 0.019984,
+        "headline opus-5.5 xhigh": 0.035068,
+        "headline fable-5.1 medium": 0.06789,
+        "headline fable-5.1 high": 0.08184,
+        "headline fable-5.1 xhigh": 0.20411,
+        "headline gpt-6-astra medium": 0.04635,
+        "headline gpt-6-astra high": 0.09295,
+        "headline gpt-6-astra xhigh": 0.1557,
+        "headline gpt-5.6-sol medium": 0.035532,
+        "headline gpt-5.6-sol high": 0.048224,
+        "headline gpt-5.6-sol xhigh": 0.080784
+      },
+      "finished_at": "2026-11-06T18:24:11.102700+00:00",
+      "calls_written": 374,
+      "calls_failed": 3,
+      "calls_skipped_for_budget": 0,
+      "spent_usd": 18.40799,
+      "stopped_configurations": {},
+      "calls_without_success_left": 3
     }
   ]
 }
