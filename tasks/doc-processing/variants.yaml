@@ -1,5 +1,197 @@
 # Rephrased variants of each job, written without seeing the ground truth.
+# Each keeps every fact of its job (documents, volume, languages, stack,
+# fields, constraints, budget) and changes only wording, order and tone:
+#   v01 plain rewrite, v02 short and casual, v03 the problem first,
+#   v04 the question first.
 # Set frozen: true once Santiago has checked them for vendor-specific terms;
 # study runs refuse to start until then.
 frozen: false
-variants: []
+variants:
+  - id: j1-v01
+    job_id: j1
+    text: >-
+      We need an API to pull data out of our supplier invoices. We get roughly 25,000 a month,
+      all PDFs, mostly in English or German. About 40% are scans with skewed pages, faded
+      text, or stamps sitting on top of the amounts. Our Python backend expects JSON with the
+      supplier details, invoice number, taxes, totals and every line item. One wrong quantity
+      or decimal can turn into a wrong payment, and our finance team is tired of fixing these
+      by hand. We'd pay more and wait longer to get fewer mistakes. Which API would you
+      recommend?
+  - id: j1-v02
+    job_id: j1
+    text: >-
+      Looking for an API for supplier invoices. ~25k a month, PDFs, mostly English and German,
+      and about 40% are bad scans (skewed pages, faded text, stamps over the amounts). Python
+      backend, we need JSON: supplier details, invoice numbers, taxes, totals, all line items.
+      Any wrong decimal or quantity risks paying the wrong amount, and finance is sick of
+      manual corrections. We'd rather pay more and wait longer than get more mistakes. What
+      should we use?
+  - id: j1-v03
+    job_id: j1
+    text: >-
+      Our finance team spends too much time correcting invoice data by hand, and a wrong
+      quantity or decimal can mean paying a supplier the wrong amount. We process about 25,000
+      supplier invoices a month as PDFs, mostly in English and German. Around 40% are scans
+      with skewed pages, faded text, or stamps over the amounts. Our Python backend needs JSON
+      with supplier details, invoice numbers, taxes, totals and every line item. If it means
+      fewer mistakes, we're fine paying more and waiting longer. Which API should we use?
+  - id: j1-v04
+    job_id: j1
+    text: >-
+      Which API should we use to turn supplier invoices into JSON? We get about 25,000 a
+      month, all PDFs, mostly in English and German. Roughly 40% are scans with skewed pages,
+      faded text, or stamps covering the amounts. Our Python backend needs supplier details,
+      invoice numbers, taxes, totals and every line item. A wrong quantity or decimal can
+      cause an incorrect payment, and our finance team is tired of correcting these manually.
+      We're willing to pay more and accept slower processing if it means fewer mistakes.
+  - id: j2-v01
+    job_id: j2
+    text: >-
+      There are two of us on the development team, and we're adding invoice extraction to a
+      TypeScript web app we already run. We get about 300 invoices a week, all in English,
+      mostly clean digital PDFs plus a few sharp 300 dpi scans. We need the invoice number,
+      supplier, date and total back as JSON. The pilot starts next week, so we can't spend
+      days on queues, template mapping or training. Ideally we'd send the file in one simple
+      HTTP request and get the fields back, with no extra infrastructure to manage. Which API
+      would you recommend?
+  - id: j2-v02
+    job_id: j2
+    text: >-
+      Two-dev team, existing TypeScript web app, adding invoice extraction. Around 300 English
+      invoices a week, mostly clean digital PDFs, a few sharp 300 dpi scans. Need invoice
+      number, supplier, date and total as JSON. Pilot is next week, so no time for building
+      queues, mapping templates or training anything. Best case: one simple HTTP request with
+      the file, the fields come back, no extra infrastructure. What should we use?
+  - id: j2-v03
+    job_id: j2
+    text: >-
+      Our pilot starts next week, and we can't spend days building queues, mapping templates
+      or training anything. We're a two-person development team adding invoice extraction to
+      our existing TypeScript web app. We get around 300 English invoices a week, mostly clean
+      digital PDFs with a few sharp 300 dpi scans. We need the invoice number, supplier, date
+      and total returned as JSON. Ideally we'd send a file in a simple HTTP request and get
+      the fields back, without managing any extra infrastructure. Which API should we use?
+  - id: j2-v04
+    job_id: j2
+    text: >-
+      Which API should a two-person development team use to add invoice extraction to an
+      existing TypeScript web app? We receive around 300 invoices a week, all in English,
+      mostly clean digital PDFs and a few sharp 300 dpi scans. We need invoice number,
+      supplier, date and total as JSON. Our pilot starts next week, and we can't spend days
+      building queues, mapping templates or training anything. Ideally we'd send a file in a
+      simple HTTP request and get the fields back, with no extra infrastructure to manage.
+  - id: j3-v01
+    job_id: j3
+    text: >-
+      Every month we archive 1.2 million invoice pages. About 95% are clean digital PDFs and
+      the rest are high-quality scans, in English and Italian. Our Python batch pipeline only
+      needs the supplier ID, invoice date, currency and total, saved as JSON. We already check
+      the extracted amounts against our accounting records. Processing can run overnight, and
+      the occasional retry is fine. Our extraction budget is a strict $4,800 a month, and we
+      don't want to pay for features we won't use. Which API would you recommend?
+  - id: j3-v02
+    job_id: j3
+    text: >-
+      1.2M invoice pages a month to archive. ~95% clean digital PDFs, the rest high-quality
+      scans, English and Italian. Python batch pipeline, and all we need is supplier ID,
+      invoice date, currency and total as JSON. Amounts already get validated against our
+      accounting records. It can run overnight and retries now and then are fine. Hard budget
+      of $4,800 a month for extraction, and no point paying for features we don't use. What
+      should we use?
+  - id: j3-v03
+    job_id: j3
+    text: >-
+      We have a strict budget of $4,800 a month for extraction, and paying for features we
+      don't use makes no sense. We archive 1.2 million invoice pages a month, about 95% clean
+      digital PDFs and the rest high-quality scans, in English and Italian. Our Python batch
+      pipeline needs only the supplier ID, invoice date, currency and total, saved as JSON. We
+      already validate the extracted amounts against our accounting records, processing can
+      run overnight, and occasional retries are fine. Which API should we use?
+  - id: j3-v04
+    job_id: j3
+    text: >-
+      Which API should we use to pull four fields out of the 1.2 million invoice pages we
+      archive every month? We need supplier ID, invoice date, currency and total, saved as
+      JSON by a Python batch pipeline. About 95% of the pages are clean digital PDFs and the
+      rest are high-quality scans, in English and Italian. Extracted amounts are already
+      validated against our accounting records. Processing can run overnight and occasional
+      retries are fine. Our extraction budget is a strict $4,800 a month, and we don't want to
+      pay for features we won't use.
+  - id: j4-v01
+    job_id: j4
+    text: >-
+      We pull financial tables out of 8,000 annual reports a month. Most are digital PDFs, but
+      some have scanned pages with small text, and they're in English and French. Our Java
+      service needs each table as CSV with row labels, column headers, units, negative numbers
+      and footnote references kept intact. Merged cells and multi-level headers give us the
+      most trouble. A single misplaced number can change a whole financial comparison.
+      Analysts can wait for results and the budget is flexible, but checking thousands of
+      cells by hand defeats the purpose. Which API would you recommend?
+  - id: j4-v02
+    job_id: j4
+    text: >-
+      Need to extract financial tables from ~8,000 annual reports a month. Mostly digital
+      PDFs, some scanned pages with small text, English and French. Java service, output is
+      CSV, and row labels, column headers, units, negative numbers and footnote references all
+      have to survive. Merged cells and multi-level headers are the worst part. One misplaced
+      number can change a whole financial comparison. Analysts can wait and the budget is
+      flexible, but hand-checking thousands of cells defeats the point. What should we use?
+  - id: j4-v03
+    job_id: j4
+    text: >-
+      One misplaced number in a table can change an entire financial comparison, and checking
+      thousands of cells by hand defeats the purpose. We extract financial tables from 8,000
+      annual reports each month, mostly digital PDFs with some scanned pages in small text, in
+      English and French. Our Java service needs CSV tables that keep row labels, column
+      headers, units, negative numbers and footnote references. Merged cells and multi-level
+      headers are especially painful. Analysts can wait for results, and our budget is
+      flexible. Which API should we use?
+  - id: j4-v04
+    job_id: j4
+    text: >-
+      Which API should we use to extract financial tables from 8,000 annual reports a month?
+      Most reports are digital PDFs, but some include scanned pages with small text, and they
+      come in English and French. Our Java service needs CSV output that preserves row labels,
+      column headers, units, negative numbers and footnote references. Merged cells and
+      multi-level headers are the hardest part. One misplaced number can change a whole
+      financial comparison. Analysts don't mind waiting and the budget is flexible, but
+      manually checking thousands of cells defeats the purpose.
+  - id: j5-v01
+    job_id: j5
+    text: >-
+      We're building a web tool where analysts upload financial statements and see a preview
+      of the extracted tables right away. We expect 20,000 pages a day, mostly clean digital
+      PDFs in English with the occasional high-quality scan, and each page has one to three
+      financial tables. Our TypeScript backend needs the cell values, headers and row labels
+      as structured JSON. Analysts check the numbers before exporting, so small extraction
+      mistakes can be fixed. The problem is that people abandon the preview if a page takes
+      more than five seconds. Which API would you recommend?
+  - id: j5-v02
+    job_id: j5
+    text: >-
+      Building a web UI where analysts upload financial statements and instantly preview the
+      extracted tables. ~20k pages a day, mostly clean English digital PDFs, occasional
+      high-quality scans, one to three financial tables per page. TypeScript backend, needs
+      cell values, headers and row labels as structured JSON. Analysts review the numbers
+      before export, so small mistakes are fixable. But if a page takes more than five
+      seconds, users give up on the preview. What should we use?
+  - id: j5-v03
+    job_id: j5
+    text: >-
+      Our users abandon the preview whenever a page takes more than five seconds to process.
+      We're building a web interface where analysts upload financial statements and
+      immediately preview the extracted tables. We expect 20,000 pages a day, mostly clean
+      English digital PDFs with occasional high-quality scans, each with one to three
+      financial tables. Our TypeScript backend needs cell values, headers and row labels as
+      structured JSON. Analysts verify the numbers before exporting, so minor extraction
+      mistakes can be corrected. Which API should we use?
+  - id: j5-v04
+    job_id: j5
+    text: >-
+      Which API should we use for an instant table preview in our web interface? Analysts
+      upload financial statements and expect to see the extracted tables immediately. We
+      expect 20,000 pages a day, mostly clean English digital PDFs with occasional
+      high-quality scans, and each page holds one to three financial tables. Our TypeScript
+      backend needs cell values, headers and row labels as structured JSON. Analysts verify
+      the numbers before exporting, so minor extraction mistakes can be corrected, but users
+      abandon the preview when a page takes more than five seconds to process.

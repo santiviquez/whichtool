@@ -1,12 +1,59 @@
-# The original job descriptions, written by Santiago. Each job is sent to the
-# models as-is (variant v00) and is the source for the rephrased variants in
-# variants.yaml. No tool or vendor names.
+# The original job descriptions. Each job is sent to the models as-is
+# (variant v00) and is the source for the rephrased variants in variants.yaml.
+# No tool or vendor names. Only the text is sent, so it alone has to make
+# clear what matters most in the job (accuracy, latency, cost or ease of
+# integration). The comments are for us; models never see them.
 #
-# Only the text is sent, so it alone has to make clear what matters most
-# in the job (accuracy, latency, cost or ease of integration).
-#
-# jobs:
-#   - id: j1
-#     text: |
-#       ...
-jobs: []
+# Picked by Santiago on 2026-11-06 from candidates written by ChatGPT
+# (G1, G4, G7, G5, G10 in the candidate-jobs doc). Invoices are tested for
+# three needs and financial tables for two, so we can see whether a model
+# changes its pick when only the need changes.
+jobs:
+  # invoices, need: accuracy (candidate G1)
+  - id: j1
+    text: >-
+      We process about 25,000 supplier invoices a month. They're PDFs, mostly in English and
+      German. Around 40% are scans with skewed pages, faded text, or stamps over the amounts.
+      Our Python backend needs JSON with supplier details, invoice numbers, taxes, totals, and
+      every line item. A wrong quantity or decimal can lead to an incorrect payment, and our
+      finance team is tired of correcting these manually. We're willing to pay more and wait
+      longer if it means fewer mistakes. Which API should we use?
+  # invoices, need: ease of integration (candidate G4)
+  - id: j2
+    text: >-
+      We're a two-person development team adding invoice extraction to an existing TypeScript
+      web app. We receive around 300 English invoices a week, mostly clean digital PDFs with a
+      few sharp 300 dpi scans. We need invoice number, supplier, date, and total returned as
+      JSON. Our pilot starts next week, and we can't spend days building queues, mapping
+      templates, or training anything. Ideally, we send a file through a simple HTTP request
+      and get the fields back without managing extra infrastructure. Which API should we use?
+  # invoices, need: cost (candidate G7)
+  - id: j3
+    text: >-
+      We archive 1.2 million invoice pages every month. About 95% are clean digital PDFs, and
+      the rest are high-quality scans. They're in English and Italian. Our Python batch
+      pipeline needs only supplier ID, invoice date, currency, and total, saved as JSON. We
+      already validate the extracted amounts against our accounting records. Processing can
+      run overnight, and occasional retries are fine. We have a strict monthly budget of
+      $4,800 for extraction, and paying for features we don't use makes no sense. Which API
+      should we use?
+  # financial tables, need: accuracy (candidate G5)
+  - id: j4
+    text: >-
+      We're extracting financial tables from 8,000 annual reports each month. Most are digital
+      PDFs, but some contain scanned pages with small text. They're in English and French. Our
+      Java service needs CSV tables with row labels, column headers, units, negative numbers,
+      and footnote references preserved. Merged cells and multi-level headers are especially
+      painful. One misplaced number can change an entire financial comparison. Analysts can
+      wait for results, and our budget is flexible, but manually checking thousands of cells
+      defeats the purpose. Which API should we use?
+  # financial tables, need: latency (candidate G10)
+  - id: j5
+    text: >-
+      We're building a web interface where analysts upload financial statements and
+      immediately preview the extracted tables. We expect 20,000 pages daily, mostly clean
+      English digital PDFs with occasional high-quality scans. Each page contains one to three
+      financial tables. Our TypeScript backend needs cell values, headers, and row labels as
+      structured JSON. Analysts verify the numbers before exporting, so minor extraction
+      mistakes can be corrected. The problem is that users abandon the preview when a page
+      takes more than five seconds to process. Which API should we use?
