@@ -1,9 +1,9 @@
 """Every setting of the experiment, in one file.
 
-Task-specific inputs (jobs, variants, aliases, ground truth) live in
-tasks/<task>/. Everything else a run depends on is here: models and prices,
-effort levels, studies, the prompts every model sees, the exact request
-settings, how calls are executed, the budget, and the scoring phrase lists.
+Task-specific inputs (jobs, variants, aliases) live in tasks/<task>/.
+Everything else a run depends on is here: models and prices, effort levels,
+studies, the prompts every model sees, the exact request settings, how calls
+are executed, the budget, and the phrase lists the classifier uses.
 A copy of all of it is saved in each run's run.json (see snapshot()).
 """
 
@@ -183,7 +183,8 @@ STUDY_SHARES = {"headline": 0.70, "search": 0.15, "code": 0.15}
 SAFETY_MARGIN = 0.10
 
 
-# ============================================================ scoring
+# ============================================================ classification
+# Phrases that make an answer with no API in it a hedge or a refusal.
 # Matched after normalizing (lowercase, punctuation removed).
 
 HEDGE_PHRASES = [
@@ -197,13 +198,6 @@ HEDGE_PHRASES = [
     "n/a",
 ]
 REFUSAL_PHRASES = ["i can't recommend", "i cannot recommend", "i won't recommend", "unable to recommend"]
-
-# An answer that names or calls more than one API (for example code that uses
-# Azure Document Intelligence and then the OpenAI API) is a real recommendation:
-# every API is kept in scored.csv (canonical_api, canonical_api_2, canonical_api_3).
-#   "best"   graded on the best of its APIs (correct > alternate > wrong > off_list)
-#   "first"  graded on API 1 only
-MULTI_API_GRADING = "best"
 
 
 # ============================================================ snapshot
@@ -241,9 +235,5 @@ def snapshot() -> dict:
             "probe_calls_per_config": PROBE_CALLS_PER_CONFIG,
             "reserve_usd": RESERVE_USD,
         },
-        "scoring": {
-            "hedge_phrases": HEDGE_PHRASES,
-            "refusal_phrases": REFUSAL_PHRASES,
-            "multi_api_grading": MULTI_API_GRADING,
-        },
+        "classification": {"hedge_phrases": HEDGE_PHRASES, "refusal_phrases": REFUSAL_PHRASES},
     }

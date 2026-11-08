@@ -5,13 +5,13 @@
 #           when they are the whole answer (e.g. "Unstructured")
 #   code:   case-insensitive substrings that show the code calls this API
 #           (imports, package names, hostnames); used by the code study
-#   hosted: false for self-hosted or open-source tools (always off_list)
+#   hosted: false for self-hosted or open-source tools (in code, dropped when a hosted API is also called)
 #
 # Written from general knowledge, without the ground truth: it lists the
 # usual candidates so most answers map on the first pass. Anything the
-# models name that is not here shows up in results/<task>/unmapped.csv;
-# add it here and rescore. Which of these are in Santiago's comparison is
-# decided by ground_truth.yaml, not by this file.
+# models name that is not here is printed by `python -m whichtool.classify`;
+# add it here and rerun. Which of these are in Santiago's comparison is
+# decided later, with the ground truth, not by this file.
 apis:
   azure_document_intelligence:
     names: [Azure AI Document Intelligence, Azure Document Intelligence, Microsoft Document Intelligence,

@@ -3,6 +3,7 @@
 import asyncio
 import csv
 import json
+from pathlib import Path
 
 import pytest
 from types import SimpleNamespace
@@ -13,6 +14,8 @@ from openai.types.responses import Response
 from whichtool.config import MODELS, STUDIES
 from whichtool.harness import Config, RunWriter, build_request, run_plan
 from whichtool.taskspec import load_task
+
+FIXTURES = Path(__file__).parent / "fixtures"  # a made-up task for smoke tests
 
 ANSWER = '{"api": "Postmark", "reason": "latency", "sentence": "Fastest delivery."}'
 USAGE = {"input_tokens": 100, "output_tokens": 50}
@@ -87,7 +90,7 @@ class FakeOpenAI:
 
 def _run(tmp_path, clients, model="opus-5.5", study="headline", epochs=2,
          allowed_usd=10.0, reserve_usd=0.0):
-    task = load_task("example")
+    task = load_task("example", FIXTURES)
     writer = RunWriter(run_dir=tmp_path, run_id="test", run_kind="study", task_name=task.name,
                        variants_sha=task.variants_sha, allowed_usd=allowed_usd)
     plan = [Config(STUDIES[study], MODELS[model], "high", task.variants, epochs)]
@@ -152,7 +155,7 @@ def test_pause_turn_is_continued(tmp_path):
     )
     done = claude_msg([{"type": "text", "text": ANSWER}])
     fake = FakeAnthropic([paused, done])
-    task = load_task("example")
+    task = load_task("example", FIXTURES)
     writer = RunWriter(run_dir=tmp_path, run_id="t", run_kind="study", task_name=task.name,
                        variants_sha="", allowed_usd=10)
     plan = [Config(STUDIES["search"], MODELS["opus-5.5"], "high", task.variants[:1], 1)]
@@ -208,9 +211,9 @@ class FlakyAnthropic(FakeAnthropic):
 
 def test_resume_reruns_only_unfinished_calls(tmp_path):
     from whichtool.harness import done_slots, slot_key, slots
-    from whichtool.score import drop_superseded
+    from whichtool.classify import drop_superseded
 
-    task = load_task("example")
+    task = load_task("example", FIXTURES)
     plan = [Config(STUDIES["headline"], MODELS["opus-5.5"], "high", task.variants, 2)]
 
     def writer():
@@ -236,7 +239,7 @@ def test_resume_reruns_only_unfinished_calls(tmp_path):
 
 
 def test_stopping_starts_nothing_new(tmp_path):
-    task = load_task("example")
+    task = load_task("example", FIXTURES)
     w = RunWriter(run_dir=tmp_path, run_id="r", run_kind="study", task_name=task.name,
                   variants_sha="", allowed_usd=10)
     w.stopping = True
@@ -302,7 +305,7 @@ class RejectingAnthropic(FakeAnthropic):
 
 def test_a_rejected_request_stops_its_configuration(tmp_path):
     fake = RejectingAnthropic()
-    task = load_task("example")
+    task = load_task("example", FIXTURES)
     w = RunWriter(run_dir=tmp_path, run_id="r", run_kind="study", task_name=task.name, variants_sha="",
                   allowed_usd=10)
     plan = [Config(STUDIES["search"], MODELS["opus-5.5"], "high", task.variants, 3)]
@@ -330,7 +333,7 @@ def test_running_out_of_credits_stops_a_configuration():
 
 def test_money_set_aside_per_configuration(tmp_path):
     # a configuration whose calls cost $4 each may not start under a $3 cap; a $0.01 one may
-    task = load_task("example")
+    task = load_task("example", FIXTURES)
     w = RunWriter(run_dir=tmp_path, run_id="r", run_kind="study", task_name=task.name, variants_sha="",
                   allowed_usd=3)
     plan = [Config(STUDIES["headline"], MODELS["fable-5.1"], "xhigh", task.variants, 1),
@@ -364,7 +367,7 @@ def test_preflight_reports_unknown_models():
 def test_set_aside_amount_learns_from_finished_calls(tmp_path):
     # before any data a call sets aside $5, so under a $6 cap only one runs at a time and the
     # rest wait; once it has cost $0.0014, the waiting calls set aside that much instead
-    task = load_task("example")
+    task = load_task("example", FIXTURES)
     w = RunWriter(run_dir=tmp_path, run_id="r", run_kind="study", task_name=task.name, variants_sha="",
                   allowed_usd=6)
     plan = [Config(STUDIES["headline"], MODELS["opus-5.5"], "high", task.variants, 3)]
