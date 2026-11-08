@@ -97,12 +97,14 @@ The scorer maps each answer to a canonical API id through `aliases.yaml` (names 
 | `alternate` | an acceptable near-tie | miss | hit |
 | `wrong` | another API from the comparison | miss | miss |
 | `off_list` | an API outside the comparison, or a self-hosted tool | miss | miss |
-| `hedge` | more than one API, or "it depends" | miss | miss |
+| `hedge` | "it depends" or similar, with no API named | miss | miss |
 | `refusal` | the model declined | miss | miss |
 | `truncated` | no answer: the model used its whole output limit, or Claude's search was still running after the last continuation | miss | miss |
 | `format_error` | the answer could not be parsed, or no code was written | miss | miss |
 | `api_error` | the call failed after all retries | not scored | not scored |
 | `unmapped` | no alias matched yet; fix the alias table and rescore | miss | miss |
+
+An answer that names or calls more than one API (for example code that extracts with Azure Document Intelligence and then structures the result with the OpenAI API) is a real recommendation, not a hedge. `scored.csv` keeps every API: `canonical_api` (API 1), `canonical_api_2`, `canonical_api_3` and `n_apis`. In a stated answer API 1 is the one named first; in code it is the one listed first in `aliases.yaml`. `MULTI_API_GRADING` in `config.py` sets how such an answer is graded: `"best"` (the default) takes the best grade among its APIs, `"first"` grades API 1 only. `graded_api` says which API the status came from. The report shows such picks as `a + b`.
 
 A failed call says nothing about the model's choice, so it is left out of accuracy and counted in the report's "failed calls" column instead. Rerun it with `--resume`; once that call succeeds, the earlier failure is dropped.
 

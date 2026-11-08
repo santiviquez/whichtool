@@ -16,7 +16,7 @@ has a successful call, its earlier failed rows are dropped):
     alternate    an acceptable alternate (counts only for the lenient score)
     wrong        another API from the comparison
     off_list     a known API outside the comparison, or a self-hosted tool
-    hedge        more than one API named, or "it depends"
+    hedge        "it depends" or similar, and no API named
     refusal      the model declined (refusal stop reason or refusal text)
     truncated    no answer because the model used its whole output limit, or
                  Claude's search was still running after the last continuation
@@ -25,6 +25,10 @@ has a successful call, its earlier failed rows are dropped):
     record_error the call finished but the harness failed to record it (a harness bug)
     unmapped     no alias matched; add it to aliases.yaml and rescore
     unscored     mapped, but there is no ground truth yet
+
+An answer that names or calls more than one API is a real recommendation, not a
+hedge: every API is kept (canonical_api, canonical_api_2, canonical_api_3) and
+the answer is graded as MULTI_API_GRADING in config.py says.
 """
 
 from __future__ import annotations
@@ -35,10 +39,10 @@ import hashlib
 import json
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from .config import HEDGE_PHRASES, REFUSAL_PHRASES, RESULTS_DIR
+from .config import HEDGE_PHRASES, MULTI_API_GRADING, REFUSAL_PHRASES, RESULTS_DIR
 from .taskspec import TaskSpec, load_aliases, load_ground_truth, load_task
 
 ERROR_STATUSES = ("api_error", "record_error")
@@ -46,7 +50,11 @@ ERROR_STATUSES = ("api_error", "record_error")
 CUT_OFF = ("max_tokens", "pause_turn", "incomplete:max_output_tokens")
 
 SCORED_EXTRA = [
-    "canonical_api",
+    "canonical_api",  # API 1
+    "canonical_api_2",
+    "canonical_api_3",
+    "n_apis",
+    "graded_api",  # the API the status was graded on
     "matched_names",
     "match_method",
     "in_comparison",
@@ -68,9 +76,10 @@ def norm(s: str) -> str:
 
 @dataclass
 class Match:
-    api_id: str | None
+    api_id: str | None  # API 1
     names: list[str]
     method: str  # exact | contains | multiple | none | code | code_multiple
+    ids: list[str] = field(default_factory=list)  # every API, API 1 first
 
 
 class AliasTable:
@@ -101,7 +110,7 @@ class AliasTable:
             return Match(None, [], "none")
         for n, api_id in self.names + self.exact:
             if a == n:
-                return Match(api_id, [n], "exact")
+                return Match(api_id, [n], "exact", [api_id])
         spans: list[tuple[int, int, str, str]] = []
         for n, api_id in self.names:
             for m in re.finditer(rf"(?<![a-z0-9]){re.escape(n)}(?![a-z0-9])", a):
@@ -109,28 +118,31 @@ class AliasTable:
                 if any(s >= s2 and e <= e2 for s2, e2, _, _ in spans):
                     continue  # inside a longer alias already found
                 spans.append((s, e, n, api_id))
+        spans.sort()  # API 1 is the one named first
         ids = list(dict.fromkeys(api_id for _, _, _, api_id in spans))
         names = [n for _, _, n, _ in spans]
         if len(ids) == 1:
-            return Match(ids[0], names, "contains")
+            return Match(ids[0], names, "contains", ids)
         if len(ids) > 1:
-            return Match(None, names, "multiple")
+            return Match(ids[0], names, "multiple", ids)
         return Match(None, [], "none")
 
     def match_code(self, text: str) -> Match:
         t = code_only(text).lower()
         hits = [(c, api_id) for c, api_id in self.code if c in t]
+        # API 1 is the one listed first in aliases.yaml (document APIs come
+        # before general LLM APIs there), not the one the code calls first.
         ids = list(dict.fromkeys(api_id for _, api_id in hits))
-        # Helpers such as PyMuPDF for page rendering don't make it a hedge
-        # when the code also calls a hosted API.
+        # Helpers such as PyMuPDF for page rendering don't count as a second
+        # API when the code also calls a hosted API.
         if any(self.hosted(i) for i in ids):
             ids = [i for i in ids if self.hosted(i)]
             hits = [(c, i) for c, i in hits if i in ids]
         names = [c for c, _ in hits]
         if len(ids) == 1:
-            return Match(ids[0], names, "code")
+            return Match(ids[0], names, "code", ids)
         if len(ids) > 1:
-            return Match(None, names, "code_multiple")
+            return Match(ids[0], names, "code_multiple", ids)
         return Match(None, [], "none")
 
 
@@ -211,24 +223,43 @@ def classify(row: dict, text: str, table: AliasTable, gt: dict | None) -> dict:
         out["match_method"] = m.method
         if not out["status"]:
             answer = norm(row.get("api", ""))
-            if m.method in ("multiple", "code_multiple"):
-                out["status"] = "hedge"
-            elif any(norm(p) in answer for p in REFUSAL_PHRASES):
+            if any(norm(p) in answer for p in REFUSAL_PHRASES):
                 out["status"] = "refusal"
             elif m.api_id is None and any(f" {norm(p)} " in f" {answer} " for p in HEDGE_PHRASES):
                 out["status"] = "hedge"
             elif m.api_id is None:
                 out["status"] = "unmapped"
             else:
-                out["canonical_api"] = m.api_id
-                out["status"] = _grade(m.api_id, row.get("job_id", ""), table, gt)
+                ids = m.ids or [m.api_id]
+                for col, api_id in zip(("canonical_api", "canonical_api_2", "canonical_api_3"), ids):
+                    out[col] = api_id
+                out["n_apis"] = len(ids)
+                out["graded_api"], out["status"] = grade_apis(ids, row.get("job_id", ""), table, gt)
                 if gt:
-                    out["in_comparison"] = m.api_id in set(gt.get("comparison") or [])
+                    out["in_comparison"] = out["graded_api"] in set(gt.get("comparison") or [])
 
     if gt and out["status"] not in ("unscored", *ERROR_STATUSES):
         out["strict_correct"] = int(out["status"] == "correct")
         out["lenient_correct"] = int(out["status"] in ("correct", "alternate"))
     return out
+
+
+GRADE_ORDER = ["correct", "alternate", "wrong", "off_list", "unscored"]
+
+
+def grade_apis(ids: list[str], job_id: str, table: AliasTable, gt: dict | None,
+               how: str = MULTI_API_GRADING) -> tuple[str, str]:
+    """(graded API, status) for an answer's APIs, API 1 first.
+
+    "best": the best grade among them. "first": only API 1 is graded.
+    """
+    if how == "first" or len(ids) == 1:
+        return ids[0], _grade(ids[0], job_id, table, gt)
+    if how != "best":
+        raise ValueError(f"MULTI_API_GRADING must be 'best' or 'first', not {how!r}")
+    grades = [(GRADE_ORDER.index(_grade(i, job_id, table, gt)), n, i) for n, i in enumerate(ids)]
+    _, _, best = min(grades)  # ties go to the API named first
+    return best, _grade(best, job_id, table, gt)
 
 
 def _grade(api_id: str, job_id: str, table: AliasTable, gt: dict | None) -> str:

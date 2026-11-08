@@ -1,6 +1,6 @@
 import pytest
 
-from whichtool.score import AliasTable, classify, norm
+from whichtool.score import AliasTable, classify, grade_apis, norm
 from whichtool.stats import clustered_mean_ci, paired_diff_ci, pass_hat_k
 
 ALIASES = {
@@ -46,9 +46,34 @@ def test_longest_alias_wins(table):
     assert table.match_name("Google Cloud Document AI").api_id == "google_docai"
 
 
-def test_two_apis_is_hedge(table):
-    out = classify(row("AWS Textract or Google Document AI"), "", table, GT)
-    assert out["status"] == "hedge" and out["strict_correct"] == 0
+def test_two_apis_are_kept_and_graded_on_the_best(table):
+    # Naming two APIs is a recommendation, not a hedge, even with a hedge word in it.
+    out = classify(row("Either AWS Textract or Google Document AI"), "", table, GT)
+    assert out["match_method"] == "multiple"
+    assert (out["canonical_api"], out["canonical_api_2"], out["canonical_api_3"]) == ("aws_textract", "google_docai", "")
+    assert out["n_apis"] == 2
+    assert out["status"] == "alternate" and out["graded_api"] == "google_docai"
+    assert out["strict_correct"] == 0 and out["lenient_correct"] == 1
+    # API 1 is the one named first
+    assert classify(row("Google Document AI or AWS Textract"), "", table, GT)["canonical_api"] == "google_docai"
+
+
+def test_multi_api_grading_rules(table):
+    ids = ["aws_textract", "azure_di"]
+    assert grade_apis(ids, "j1", table, GT, "best") == ("azure_di", "correct")
+    assert grade_apis(ids, "j1", table, GT, "first") == ("aws_textract", "wrong")
+    # no ground truth: nothing to choose between, so API 1 is reported
+    assert grade_apis(ids, "j1", table, None, "best") == ("aws_textract", "unscored")
+    with pytest.raises(ValueError):
+        grade_apis(ids, "j1", table, GT, "half")
+
+
+def test_report_labels_multi_api_picks():
+    from whichtool.report import pick
+
+    assert pick({"canonical_api": "a", "canonical_api_2": "b", "canonical_api_3": "", "status": "correct"}) == "a + b"
+    assert pick({"canonical_api": "a", "status": "wrong"}) == "a"
+    assert pick({"canonical_api": "", "status": "hedge"}) == "(hedge)"
 
 
 @pytest.mark.parametrize(
@@ -91,7 +116,9 @@ def test_code_study(table):
     both = "```python\nfrom azure.ai.documentintelligence import X\nclient('textract')\n```"
     both = both.replace("client('textract')", "boto3.client('textract')")
     t = AliasTable({**ALIASES, "aws_textract": {"code": ["client('textract'"]}})
-    assert classify(r, both, t, GT)["status"] == "hedge"
+    out = classify(r, both, t, GT)
+    # two hosted APIs: both kept, API 1 in aliases.yaml order, graded on the best
+    assert (out["canonical_api"], out["canonical_api_2"], out["status"]) == ("azure_di", "aws_textract", "correct")
     assert classify(r, "Sorry, no code.", table, GT)["status"] == "format_error"
 
 

@@ -198,6 +198,13 @@ HEDGE_PHRASES = [
 ]
 REFUSAL_PHRASES = ["i can't recommend", "i cannot recommend", "i won't recommend", "unable to recommend"]
 
+# An answer that names or calls more than one API (for example code that uses
+# Azure Document Intelligence and then the OpenAI API) is a real recommendation:
+# every API is kept in scored.csv (canonical_api, canonical_api_2, canonical_api_3).
+#   "best"   graded on the best of its APIs (correct > alternate > wrong > off_list)
+#   "first"  graded on API 1 only
+MULTI_API_GRADING = "best"
+
 
 # ============================================================ snapshot
 
@@ -234,5 +241,9 @@ def snapshot() -> dict:
             "probe_calls_per_config": PROBE_CALLS_PER_CONFIG,
             "reserve_usd": RESERVE_USD,
         },
-        "scoring": {"hedge_phrases": HEDGE_PHRASES, "refusal_phrases": REFUSAL_PHRASES},
+        "scoring": {
+            "hedge_phrases": HEDGE_PHRASES,
+            "refusal_phrases": REFUSAL_PHRASES,
+            "multi_api_grading": MULTI_API_GRADING,
+        },
     }

@@ -16,12 +16,18 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .config import EFFORTS, MODELS, RESULTS_DIR
+from .config import EFFORTS, MODELS, MULTI_API_GRADING, RESULTS_DIR
 from .stats import clustered_mean_ci, mean_pass_hat_k, paired_diff_ci
 
 MISS_STATUSES = ["wrong", "off_list", "hedge", "refusal", "truncated", "format_error", "unmapped"]
 # Failed calls are not misses: they are left out of accuracy and shown on their own.
 ERROR_STATUSES = ["api_error", "record_error"]
+
+
+def pick(r: dict) -> str:
+    """The API or APIs an answer picked ("a + b" when it named or called more than one), or its status."""
+    apis = [r.get(c) for c in ("canonical_api", "canonical_api_2", "canonical_api_3") if r.get(c)]
+    return " + ".join(apis) if apis else f"({r['status']})"
 
 
 def _f(x: float, pct: bool = True) -> str:
@@ -139,14 +145,14 @@ def picks_table(rows: list[dict], top: int = 6) -> list[str]:
     out: list[str] = []
     for job in jobs:
         jr = [r for r in rows if r["job_id"] == job]
-        overall = Counter(r["canonical_api"] or f"({r['status']})" for r in jr)
+        overall = Counter(pick(r) for r in jr)
         cols = [k for k, _ in overall.most_common(top)]
         out += [f"**Job {job}**", "", "| Configuration | " + " | ".join(cols) + " | other |", "|---" * (len(cols) + 2) + "|"]
         g: dict[tuple, list[dict]] = defaultdict(list)
         for r in jr:
             g[(r["study"], r["model"], r["effort"])].append(r)
         for (study, model, effort), rr in sorted(g.items(), key=lambda kv: (kv[0][0], order_key(kv[0][1], kv[0][2]))):
-            c = Counter(r["canonical_api"] or f"({r['status']})" for r in rr)
+            c = Counter(pick(r) for r in rr)
             other = len(rr) - sum(c.get(k, 0) for k in cols)
             out.append(f"| {study} {model} {effort} | " + " | ".join(str(c.get(k, 0)) for k in cols) + f" | {other} |")
         out.append("")
@@ -167,6 +173,14 @@ def build(rows: list[dict], task: str) -> str:
         "failures all count as misses and are tallied separately.",
         "",
     ]
+    multi = Counter(r["study"] for r in rows if int(r.get("n_apis") or 0) > 1)
+    if multi:
+        how = {"best": "graded on the best of its APIs", "first": "graded on the first API only"}.get(MULTI_API_GRADING, MULTI_API_GRADING)
+        lines += [
+            "Answers that named or called more than one API count as recommendations, "
+            f"{how}: " + ", ".join(f"{n} in {study}" for study, n in sorted(multi.items())) + ".",
+            "",
+        ]
     if not graded:
         lines += ["**Not graded yet:** there is no ground_truth.yaml, so only picks, tokens and cost are shown.", ""]
 
@@ -229,7 +243,8 @@ def build(rows: list[dict], task: str) -> str:
         if head:
             lines += [
                 "Saying versus doing: for each variant, the API the model recommended most often (headline, same effort) "
-                "against the API its code used most often.",
+                "against the API its code used most often. Code that calls two APIs is its own pick (\"a + b\"), "
+                "so it differs from a recommendation of either one alone.",
                 "",
                 "| Model | Variants compared | Same API |",
                 "|---|---|---|",
@@ -238,9 +253,9 @@ def build(rows: list[dict], task: str) -> str:
                 base = head.get((model, effort)) or []
                 said, did = defaultdict(Counter), defaultdict(Counter)
                 for r in base:
-                    said[r["variant_id"]][r["canonical_api"] or r["status"]] += 1
+                    said[r["variant_id"]][pick(r)] += 1
                 for r in rr:
-                    did[r["variant_id"]][r["canonical_api"] or r["status"]] += 1
+                    did[r["variant_id"]][pick(r)] += 1
                 common = sorted(set(said) & set(did))
                 same = sum(1 for v in common if said[v].most_common(1)[0][0] == did[v].most_common(1)[0][0])
                 lines.append(f"| {model} | {len(common)} | {_f(same / len(common)) if common else 'n/a'} |")
