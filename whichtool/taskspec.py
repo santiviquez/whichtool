@@ -6,7 +6,7 @@ A task folder holds everything specific to one benchmark task:
 - jobs.yaml          the original job descriptions (written by the task owner)
 - variants.yaml      rephrased variants of each job, frozen before any run
 - aliases.yaml       API names and code signatures -> canonical API ids
-- ground_truth.yaml  best API (and alternates) per job; added after the variants are frozen
+- manual_apis.yaml   calls classified by hand (optional)
 
 Adding a new task means adding a new folder; nothing else changes.
 """
@@ -93,11 +93,6 @@ def load_task(name: str, tasks_dir: Path = TASKS_DIR) -> TaskSpec:
         variants_frozen=bool(vfile.get("frozen", False)),
         meta=meta,
     )
-
-
-def load_ground_truth(task: TaskSpec) -> dict | None:
-    gt = _read_yaml(task.path / "ground_truth.yaml")
-    return gt or None
 
 
 def load_aliases(task: TaskSpec) -> dict:

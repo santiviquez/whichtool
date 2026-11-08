@@ -2,7 +2,7 @@
 
 How often do frontier models pick the best tool for a job?
 
-Each prompt describes a real job (the first task: processing documents) without naming any tool. The model names the one hosted API it would use, and code scores that pick against a ground truth built from a structured comparison of the candidates. No LLM judges anything.
+Each prompt describes a real job (the first task: processing documents) without naming any tool. The model names the one hosted API it would use, and code maps each answer to an API id. No LLM judges anything. Grading the picks against a ground truth comes later, after the results are analyzed.
 
 - **Models:** Claude Opus 5.5, Claude Fable 5.1, GPT-6 Astra, GPT-5.6 Sol.
 - **Effort:** medium, high and xhigh on every model, set explicitly on every call (12 configurations).
@@ -10,14 +10,25 @@ Each prompt describes a real job (the first task: processing documents) without 
 - **Side studies, at high effort:** each vendor's own web search available (not requested), and the API the model actually calls when asked to write the integration code.
 - **Budget:** at most $140 of API calls in total (`BUDGET_USD` in config.py, raised from $100), enforced by the harness.
 
-Everything is public: prompts, every request and response, scores and the report.
+Everything is public: prompts, every request and response, and the classified results.
+
+## What's in the repo
+
+| Path | What it is |
+|---|---|
+| [`whichtool/`](whichtool) | The code: `run.py` runs the experiments (with `harness.py`, `records.py`, `estimate.py`), `classify.py` turns the saved answers into `results.csv`, `config.py` holds every setting |
+| [`tasks/doc-processing/`](tasks/doc-processing) | The task: jobs, frozen variants, the API aliases, and the calls classified by hand |
+| [`results/doc-processing/results.csv`](results/doc-processing/results.csv) | **The results: one row per call, everything together** (see below) |
+| `results/doc-processing/<run_id>/` | The raw record of each run (probe, headline, search, code): every request and response, failed and repeated calls included |
+| [`results/doc-processing/review/`](results/doc-processing/review) | Santiago's review of the classification (2026-11-08) |
+| [`tests/`](tests) | Tests, with a made-up task in `tests/fixtures/example/` |
 
 ## Where the settings live
 
 Two places, nothing else:
 
-- **[`whichtool/config.py`](whichtool/config.py)** holds every setting of the experiment: the models and prices, effort levels, studies, the instructions and answer schema every model sees, the exact request settings (max tokens, thinking, search tools, structured output), how calls run (concurrency, retries, timeout), the budget, and the scoring phrase lists. Command-line flags only choose what to run (task, study, models, efforts, jobs, variants, repeats).
-- **`tasks/<task>/`** holds everything about one task: jobs, variants, aliases and ground truth.
+- **[`whichtool/config.py`](whichtool/config.py)** holds every setting of the experiment: the models and prices, effort levels, studies, the instructions and answer schema every model sees, the exact request settings (max tokens, thinking, search tools, structured output), how calls run (concurrency, retries, timeout), the budget, and the phrase lists the classifier uses. Command-line flags only choose what to run (task, study, models, efforts, jobs, variants, repeats).
+- **`tasks/<task>/`** holds everything about one task: jobs, variants, aliases and calls classified by hand.
 
 Every run saves a full copy of `config.py`'s settings in its `run.json`.
 
@@ -46,7 +57,7 @@ As soon as a call finishes it is appended to two files in `results/<task>/<run_i
 | `started.txt` | The id of every call, written just before it is sent (see the budget guard) |
 | `console.log` | Everything the run printed, errors and tracebacks included, one block per session |
 
-Nothing in a run folder is ever overwritten or deleted. Failed calls keep their rows, `--resume` appends to the same files, and a rerun of the same study is a new folder. Scoring keeps only the latest successful call per slot in `scored.csv`, but the files above keep every attempt. Scoring and reporting read only these files, so they can be rerun at any time without any API call.
+Nothing in a run folder is ever overwritten or deleted. Failed calls keep their rows, `--resume` appends to the same files, and a rerun of the same study is a new folder. `results.csv` keeps only the latest successful call per slot, but the files above keep every attempt. The classifier reads only these files, so it can be rerun at any time without any API call.
 
 ## Setup
 
@@ -79,36 +90,39 @@ API keys come from the environment:
    python -m whichtool.run --task doc-processing --study code --epochs 3
    ```
    `--dry-run` prints the plan and the remaining budget without calling anything. `--models`, `--efforts`, `--jobs`, `--variants` and `--max-usd` narrow a run. If a run stops or some calls fail, finish it with `python -m whichtool.run --task doc-processing --resume <run_id>` (the command is printed at the end of the run).
-5. **Ground truth.** After the variants are frozen, the task owner adds `tasks/<task>/ground_truth.yaml` (see `ground_truth.example.yaml`): the APIs in the comparison, and the best API plus acceptable alternates for each job.
-6. **Score and report.**
+5. **Classify.**
    ```bash
-   python -m whichtool.score --task doc-processing    # -> results/<task>/scored.csv, unmapped.csv
-   python -m whichtool.report --task doc-processing   # -> results/<task>/report.md
+   python -m whichtool.classify --task doc-processing   # -> results/<task>/results.csv
    ```
-   Answers no alias matches land in `unmapped.csv`. Add them to `tasks/<task>/aliases.yaml` and score again.
+   Answers no alias matches are printed. Add them to `tasks/<task>/aliases.yaml` and run it again.
 
-## Scoring
+## Results
 
-The scorer maps each answer to a canonical API id through `aliases.yaml` (names for stated answers, code signatures such as imports and hostnames for the code study), then grades it. A call listed in the optional `manual_apis.yaml` gets the APIs listed there instead (`match_method` "manual"); for doc-processing these are the 2 answers Santiago reclassified in his review, saved in `results/doc-processing/review/`.
+[`results/doc-processing/results.csv`](results/doc-processing/results.csv) is the one file to analyse: one row per call (2,784: 2,400 headline, 192 search, 192 code; the cost probe is left out), with
 
-| Status | Meaning | Strict | Lenient |
-|---|---|---|---|
-| `correct` | the ground-truth best API | hit | hit |
-| `alternate` | an acceptable near-tie | miss | hit |
-| `wrong` | another API from the comparison | miss | miss |
-| `off_list` | an API outside the comparison, or a self-hosted tool | miss | miss |
-| `hedge` | "it depends" or similar, with no API named | miss | miss |
-| `refusal` | the model declined | miss | miss |
-| `truncated` | no answer: the model used its whole output limit, or Claude's search was still running after the last continuation | miss | miss |
-| `format_error` | the answer could not be parsed, or no code was written | miss | miss |
-| `api_error` | the call failed after all retries | not scored | not scored |
-| `unmapped` | no alias matched yet; fix the alias table and rescore | miss | miss |
+- **the call:** `call_id`, `experiment` (headline, search, code), `model`, `effort`, `job`, `wording` (`j1-v00` to `j8-v04`), `wording_by` (ChatGPT wrote v00, Claude v01 to v04), `repeat`;
+- **what the model saw and said:** `question` (the user message), `answer` (the api field of a stated answer, or the whole reply in the code experiment), `reason`, `sentence`;
+- **the classification:** `api_1` to `api_3`, `n_apis`, `match_method` and `matched_on` (how it was matched), `review` (Santiago's review: `accepted`, `changed` or `accepted_in_bulk`), `status`;
+- **search:** `searched`, `n_searches`, `search_queries`, `cited_urls`;
+- **cost and run data:** tokens, `cost_usd`, `latency_s`, `model_returned`, `stop_reason`, `call_status`, `error`, `run_id`, timestamps, and the hashes of the prompts and alias files used.
 
-An answer that names or calls more than one API (for example code that extracts with Azure Document Intelligence and then structures the result with the OpenAI API) is a real recommendation, not a hedge. `scored.csv` keeps every API: `canonical_api` (API 1), `canonical_api_2`, `canonical_api_3` and `n_apis`. In a stated answer API 1 is the one named first; in code it is the one listed first in `aliases.yaml`. `MULTI_API_GRADING` in `config.py` sets how such an answer is graded: `"best"` (the default) takes the best grade among its APIs, `"first"` grades API 1 only. `graded_api` says which API the status came from. The report shows such picks as `a + b`.
+`classify.py` writes it from the run folders. Each answer is mapped to an API id through `aliases.yaml`: names for stated answers, code signatures such as imports and hostnames for the code experiment. A call listed in `manual_apis.yaml` gets the APIs listed there instead (`match_method` "manual"); for doc-processing these are the 2 answers Santiago reclassified in his review.
 
-A failed call says nothing about the model's choice, so it is left out of accuracy and counted in the report's "failed calls" column instead. Rerun it with `--resume`; once that call succeeds, the earlier failure is dropped.
+| Status | Meaning |
+|---|---|
+| `mapped` | the answer names (or the code calls) at least one API: `api_1` to `api_3` |
+| `hedge` | "it depends" or similar, with no API named |
+| `refusal` | the model declined |
+| `truncated` | no answer: the model used its whole output limit, or Claude's search was still running after the last continuation |
+| `format_error` | the answer could not be parsed, or no code was written |
+| `unmapped` | no alias matched yet; fix the alias table and rerun |
+| `api_error` | the call failed after all retries |
 
-The report covers the three pre-registered comparisons (each configuration's accuracy with a 95% interval, medium vs xhigh within each model, and the best configuration of each vendor head to head), then the side studies, pass^k consistency, cost per correct pick and every configuration's picks per job. Intervals are clustered by job and comparisons are paired by job, because rewordings of one job mostly get the same answer: with 8 jobs the intervals are honest but wide.
+All 2,784 calls are currently `mapped`.
+
+An answer that names or calls more than one API (for example code that extracts with Azure Document Intelligence and then structures the result with the OpenAI API) keeps every one: in a stated answer `api_1` is the one named first; in code it is the one listed first in `aliases.yaml`. Self-hosted helpers found in code (such as PyMuPDF for rendering pages) are dropped when the code also calls a hosted API.
+
+Grading against a ground truth is not in the repo yet. The grading and report code written before the runs (statuses correct, alternate, wrong and off-list; intervals clustered by job) is in git history at commit 71f80b6.
 
 ## Budget guard
 
@@ -116,7 +130,7 @@ The report covers the three pre-registered comparisons (each configuration's acc
 
 ## Adding a task
 
-Create `tasks/<name>/` with `task.yaml`, `jobs.yaml`, `variants.yaml`, `aliases.yaml` and, once the variants are frozen, `ground_truth.yaml`. Nothing else changes. `tasks/example/` is a made-up smoke-test task, not part of the benchmark.
+Create `tasks/<name>/` with `task.yaml`, `jobs.yaml`, `variants.yaml` and `aliases.yaml` (and `manual_apis.yaml` if any call is classified by hand). Nothing else changes. `tests/fixtures/example/` is a made-up task for the tests, not part of the benchmark.
 
 ## Notes on vendor differences
 

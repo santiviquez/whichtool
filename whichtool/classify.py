@@ -1,38 +1,38 @@
-"""Score saved calls against the ground truth. No API calls.
+"""Classify every saved answer: which hosted API it names or calls. No API calls.
+
+    python -m whichtool.classify --task doc-processing
 
 Reads only:
     results/<task>/*/calls.csv and raw.jsonl   (what the harness wrote)
-    tasks/<task>/aliases.yaml                  (API names -> canonical ids)
+    results/<task>/review/reviews_*.csv        (the owner's review of the classification; optional)
+    tasks/<task>/aliases.yaml                  (API names and code signatures -> API ids)
     tasks/<task>/manual_apis.yaml              (calls classified by hand; optional)
-    tasks/<task>/ground_truth.yaml             (best API and alternates per job)
 Writes:
-    results/<task>/scored.csv     one row per call, with its status
-    results/<task>/unmapped.csv   answers no alias matched, for review
+    results/<task>/results.csv    one row per call: question, answer, the APIs it
+                                  names or calls, search data, cost and status.
+                                  Only the latest successful call of each slot; the
+                                  run folders keep every attempt.
+Answers no alias matches are listed on the console: add them to aliases.yaml and rerun.
 
-Statuses (every one except correct/alternate is a miss, except the two
-error statuses: a call that failed is left out of accuracy, because it says
-nothing about the model's choice. Rerun it with `run --resume`; once a slot
-has a successful call, its earlier failed rows are dropped):
-    correct      the ground-truth best API
-    alternate    an acceptable alternate (counts only for the lenient score)
-    wrong        another API from the comparison
-    off_list     a known API outside the comparison, or a self-hosted tool
+Statuses:
+    mapped       the answer names (or the code calls) at least one API: api_1 to api_3
     hedge        "it depends" or similar, and no API named
     refusal      the model declined (refusal stop reason or refusal text)
     truncated    no answer because the model used its whole output limit, or
                  Claude's search was still running after the last continuation
     format_error the answer could not be parsed, or the code had no code
+    unmapped     no alias matched; add it to aliases.yaml and rerun
     api_error    the call failed
     record_error the call finished but the harness failed to record it (a harness bug)
-    unmapped     no alias matched; add it to aliases.yaml and rescore
-    unscored     mapped, but there is no ground truth yet
 
-An answer that names or calls more than one API is a real recommendation, not a
-hedge: every API is kept (canonical_api, canonical_api_2, canonical_api_3) and
-the answer is graded as MULTI_API_GRADING in config.py says.
+An answer that names or calls more than one API keeps every one: api_1 is the one
+named first (stated answers) or listed first in aliases.yaml (code). Self-hosted
+helpers found in code (such as PyMuPDF) are dropped when the code also calls a
+hosted API. A call listed in manual_apis.yaml gets the APIs listed there instead
+(match_method "manual").
 
-A call listed in manual_apis.yaml gets the APIs listed there instead of what the
-alias table finds (match_method "manual").
+Grading against a ground truth is not part of this step. The grading code that
+existed before 2026-11-08 is in git history (commit 71f80b6).
 """
 
 from __future__ import annotations
@@ -46,28 +46,21 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .config import HEDGE_PHRASES, MULTI_API_GRADING, REFUSAL_PHRASES, RESULTS_DIR
-from .taskspec import TaskSpec, load_aliases, load_ground_truth, load_manual_apis, load_task
+from .config import HEDGE_PHRASES, REFUSAL_PHRASES, RESULTS_DIR
+from .taskspec import TaskSpec, load_aliases, load_manual_apis, load_task
 
 ERROR_STATUSES = ("api_error", "record_error")
 # stop_reason values (as calls.csv writes them) that mean the answer never finished
 CUT_OFF = ("max_tokens", "pause_turn", "incomplete:max_output_tokens")
 
-SCORED_EXTRA = [
+FIELDS = [
     "canonical_api",  # API 1
     "canonical_api_2",
     "canonical_api_3",
     "n_apis",
-    "graded_api",  # the API the status was graded on
     "matched_names",
     "match_method",
-    "in_comparison",
     "status",
-    "strict_correct",
-    "lenient_correct",
-    "aliases_sha",
-    "manual_apis_sha",
-    "ground_truth_sha",
 ]
 
 
@@ -173,9 +166,10 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:12] if path.exists() else ""
 
 
-def load_calls(task: TaskSpec, results_dir: Path, include_probe: bool) -> tuple[list[dict], dict[str, str]]:
+def load_calls(task: TaskSpec, results_dir: Path, include_probe: bool) -> tuple[list[dict], dict[str, dict]]:
+    """The calls to classify, and each call's raw record (output_text, urls) by call id."""
     rows: list[dict] = []
-    texts: dict[str, str] = {}
+    raws: dict[str, dict] = {}
     for calls in sorted((results_dir / task.name).glob("*/calls.csv")):
         with calls.open() as f:
             for r in csv.DictReader(f):
@@ -189,8 +183,52 @@ def load_calls(task: TaskSpec, results_dir: Path, include_probe: bool) -> tuple[
             with raw.open() as f:
                 for line in f:
                     rec = json.loads(line)
-                    texts[rec["call_id"]] = rec.get("output_text") or ""
-    return drop_superseded(rows), texts
+                    raws[rec["call_id"]] = {"output_text": rec.get("output_text") or "", "urls": rec.get("urls") or []}
+    return drop_superseded(rows), raws
+
+
+def load_reviews(task: TaskSpec, results_dir: Path) -> dict[str, str]:
+    """The owner's review decision per call id (accepted, changed, accepted_in_bulk); later files win."""
+    out: dict[str, str] = {}
+    for path in sorted((results_dir / task.name / "review").glob("reviews_*.csv")):
+        with path.open() as f:
+            for r in csv.DictReader(f):
+                for cid in r["call_ids"].split():
+                    out[cid] = r["decision"]
+    return out
+
+
+RESULT_COLUMNS = [
+    "call_id", "experiment", "model", "effort", "job", "wording", "wording_by", "repeat",
+    "question", "answer", "reason", "sentence",
+    "api_1", "api_2", "api_3", "n_apis", "match_method", "matched_on", "review", "status",
+    "searched", "n_searches", "search_queries", "cited_urls",
+    "input_tokens", "output_tokens", "reasoning_tokens", "cache_read_tokens", "cache_write_tokens",
+    "cost_usd", "latency_s", "model_returned", "stop_reason", "call_status", "error",
+    "run_id", "started_at", "finished_at", "variants_sha", "aliases_sha", "manual_apis_sha",
+]
+
+
+def result_row(r: dict, extra: dict, raw: dict, question: str, review: str, shas: dict | None = None) -> dict:
+    """One row of results.csv: the call, its question and answer, and its classification."""
+    code = r.get("study") == "code"
+    same = ["reason", "sentence", "searched", "n_searches", "search_queries", "input_tokens", "output_tokens",
+            "reasoning_tokens", "cache_read_tokens", "cache_write_tokens", "cost_usd", "latency_s", "model_returned",
+            "stop_reason", "error", "run_id", "started_at", "finished_at", "variants_sha"]
+    return {
+        "call_id": r["call_id"], "experiment": r.get("study", ""), "model": r.get("model", ""),
+        "effort": r.get("effort", ""), "job": r.get("job_id", ""), "wording": r.get("variant_id", ""),
+        "wording_by": "ChatGPT" if r.get("variant_id", "").endswith("v00") else "Claude",
+        "repeat": r.get("epoch", ""), "question": question,
+        # stated answers: the api field; code: the whole reply
+        "answer": raw.get("output_text", "") if code else r.get("api", ""),
+        **{k: r.get(k, "") for k in same},
+        "api_1": extra["canonical_api"], "api_2": extra["canonical_api_2"], "api_3": extra["canonical_api_3"],
+        "n_apis": extra["n_apis"], "match_method": extra["match_method"], "matched_on": extra["matched_names"],
+        "review": review, "status": extra["status"], "cited_urls": " ".join(raw.get("urls") or []),
+        "call_status": r.get("status", ""),
+        "aliases_sha": (shas or {}).get("aliases", ""), "manual_apis_sha": (shas or {}).get("manual_apis", ""),
+    }
 
 
 def _slot(r: dict) -> tuple:
@@ -203,8 +241,8 @@ def drop_superseded(rows: list[dict]) -> list[dict]:
     return [r for r in rows if r.get("status") == "ok" or _slot(r) not in ok]
 
 
-def classify(row: dict, text: str, table: AliasTable, gt: dict | None, manual: list[str] | None = None) -> dict:
-    out = {k: "" for k in SCORED_EXTRA}
+def classify(row: dict, text: str, table: AliasTable, manual: list[str] | None = None) -> dict:
+    out = {k: "" for k in FIELDS}
     refused = str(row.get("refused")).lower() == "true"
     if row.get("status") in ERROR_STATUSES:
         out["status"] = row["status"]
@@ -241,105 +279,55 @@ def classify(row: dict, text: str, table: AliasTable, gt: dict | None, manual: l
                 for col, api_id in zip(("canonical_api", "canonical_api_2", "canonical_api_3"), ids):
                     out[col] = api_id
                 out["n_apis"] = len(ids)
-                out["graded_api"], out["status"] = grade_apis(ids, row.get("job_id", ""), table, gt)
-                if gt:
-                    out["in_comparison"] = out["graded_api"] in set(gt.get("comparison") or [])
+                out["status"] = "mapped"
 
-    if gt and out["status"] not in ("unscored", *ERROR_STATUSES):
-        out["strict_correct"] = int(out["status"] == "correct")
-        out["lenient_correct"] = int(out["status"] in ("correct", "alternate"))
     return out
-
-
-GRADE_ORDER = ["correct", "alternate", "wrong", "off_list", "unscored"]
-
-
-def grade_apis(ids: list[str], job_id: str, table: AliasTable, gt: dict | None,
-               how: str = MULTI_API_GRADING) -> tuple[str, str]:
-    """(graded API, status) for an answer's APIs, API 1 first.
-
-    "best": the best grade among them. "first": only API 1 is graded.
-    """
-    if how == "first" or len(ids) == 1:
-        return ids[0], _grade(ids[0], job_id, table, gt)
-    if how != "best":
-        raise ValueError(f"MULTI_API_GRADING must be 'best' or 'first', not {how!r}")
-    grades = [(GRADE_ORDER.index(_grade(i, job_id, table, gt)), n, i) for n, i in enumerate(ids)]
-    _, _, best = min(grades)  # ties go to the API named first
-    return best, _grade(best, job_id, table, gt)
-
-
-def _grade(api_id: str, job_id: str, table: AliasTable, gt: dict | None) -> str:
-    if not gt:
-        return "unscored"
-    job = (gt.get("jobs") or {}).get(job_id)
-    if not job:
-        return "unscored"
-    if not table.hosted(api_id):
-        return "off_list"
-    if api_id == job.get("best"):
-        return "correct"
-    if api_id in set(job.get("alternates") or []):
-        return "alternate"
-    if api_id in set(gt.get("comparison") or []):
-        return "wrong"
-    return "off_list"
 
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--task", required=True)
-    p.add_argument("--include-probe", action="store_true", help="also score cost-probe calls")
+    p.add_argument("--include-probe", action="store_true", help="also classify cost-probe calls")
     p.add_argument("--results-dir", default=str(RESULTS_DIR))
     args = p.parse_args(argv)
 
     task = load_task(args.task)
     results_dir = Path(args.results_dir)
     table = AliasTable(load_aliases(task))
-    gt = load_ground_truth(task)
     manual = load_manual_apis(task)
-    rows, texts = load_calls(task, results_dir, args.include_probe)
+    rows, raws = load_calls(task, results_dir, args.include_probe)
+    reviews = load_reviews(task, results_dir)
+    questions = {v.id: v.text for v in task.variants}
     if not rows:
         sys.exit(f"No calls found under {results_dir / task.name}")
 
-    a_sha, g_sha = _sha(task.path / "aliases.yaml"), _sha(task.path / "ground_truth.yaml")
-    m_sha = _sha(task.path / "manual_apis.yaml")
+    shas = {"aliases": _sha(task.path / "aliases.yaml"), "manual_apis": _sha(task.path / "manual_apis.yaml")}
     unknown = set(manual) - {r["call_id"] for r in rows}
     if unknown:
         sys.exit(f"manual_apis.yaml lists calls that are not in the results: {sorted(unknown)}")
-    scored = []
+    results = []
     for r in rows:
-        extra = classify(r, texts.get(r["call_id"], ""), table, gt, manual.get(r["call_id"]))
-        extra["aliases_sha"], extra["manual_apis_sha"], extra["ground_truth_sha"] = a_sha, m_sha, g_sha
-        scored.append({**r, **extra})
+        raw = raws.get(r["call_id"], {})
+        extra = classify(r, raw.get("output_text", ""), table, manual.get(r["call_id"]))
+        question = questions.get(r.get("variant_id", ""), "")
+        results.append(result_row(r, extra, raw, question, reviews.get(r["call_id"], ""), shas))
 
-    out_dir = results_dir / task.name
-    columns = list(rows[0].keys()) + SCORED_EXTRA
-    with (out_dir / "scored.csv").open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
+    out = results_dir / task.name / "results.csv"
+    with out.open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=RESULT_COLUMNS)
         w.writeheader()
-        w.writerows(scored)
-
-    unmapped: dict[tuple[str, str], int] = {}
-    for r in scored:
-        if r["status"] == "unmapped":
-            key = (r["study"], r["api"] if r["study"] != "code" else f"[code] call {r['call_id']}")
-            unmapped[key] = unmapped.get(key, 0) + 1
-    with (out_dir / "unmapped.csv").open("w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["study", "answer", "count"])
-        for (study, ans), n in sorted(unmapped.items(), key=lambda kv: -kv[1]):
-            w.writerow([study, ans, n])
+        w.writerows(results)
 
     counts: dict[str, int] = {}
-    for r in scored:
+    for r in results:
         counts[r["status"]] = counts.get(r["status"], 0) + 1
-    print(f"Scored {len(scored)} calls -> {out_dir / 'scored.csv'}")
+    print(f"Classified {len(results)} calls -> {out}")
     print("  " + ", ".join(f"{k}: {v}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1])))
-    if not gt:
-        print("  No ground_truth.yaml yet: answers are mapped but not graded.")
+    unmapped = [r for r in results if r["status"] == "unmapped"]
     if unmapped:
-        print(f"  {sum(unmapped.values())} unmapped answers -> {out_dir / 'unmapped.csv'} (add them to aliases.yaml)")
+        print(f"  {len(unmapped)} answers no alias matched (add them to aliases.yaml and rerun):")
+        for r in unmapped:
+            print(f"    {r['experiment']}  {r['call_id']}  {r['answer'][:100]!r}")
     return 0
 
 
