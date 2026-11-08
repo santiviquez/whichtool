@@ -1,0 +1,16 @@
+# Calls classified by hand. These APIs replace what aliases.yaml finds for
+# that call (match_method "manual" in scored.csv). API 1 first.
+# Every other call keeps the alias classification.
+#
+# Source: Santiago's review of the answers the scorer was unsure about
+# (review tool, 2026-11-08). He reviewed 84 answers: 82 accepted as
+# classified, the 2 below changed. The full review is in
+# results/doc-processing/review/.
+
+calls:
+  640e06f9515f4174ab60fb9c116b0cd5:  # code, gpt-6-astra high, j3-v01, repeat 1
+    apis: [tesseract, openai_api]
+    why: The code runs Tesseract OCR locally, then the OpenAI API. The scorer had dropped Tesseract as a self-hosted helper.
+  771d007a61154921a3c3db3bd1c2b33e:  # code, gpt-6-astra high, j3-v02, repeat 1
+    apis: [tesseract, openai_api]
+    why: The code runs Tesseract OCR locally, then the OpenAI API. The scorer had dropped Tesseract as a self-hosted helper.

@@ -3,6 +3,7 @@
 Reads only:
     results/<task>/*/calls.csv and raw.jsonl   (what the harness wrote)
     tasks/<task>/aliases.yaml                  (API names -> canonical ids)
+    tasks/<task>/manual_apis.yaml              (calls classified by hand; optional)
     tasks/<task>/ground_truth.yaml             (best API and alternates per job)
 Writes:
     results/<task>/scored.csv     one row per call, with its status
@@ -29,6 +30,9 @@ has a successful call, its earlier failed rows are dropped):
 An answer that names or calls more than one API is a real recommendation, not a
 hedge: every API is kept (canonical_api, canonical_api_2, canonical_api_3) and
 the answer is graded as MULTI_API_GRADING in config.py says.
+
+A call listed in manual_apis.yaml gets the APIs listed there instead of what the
+alias table finds (match_method "manual").
 """
 
 from __future__ import annotations
@@ -43,7 +47,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import HEDGE_PHRASES, MULTI_API_GRADING, REFUSAL_PHRASES, RESULTS_DIR
-from .taskspec import TaskSpec, load_aliases, load_ground_truth, load_task
+from .taskspec import TaskSpec, load_aliases, load_ground_truth, load_manual_apis, load_task
 
 ERROR_STATUSES = ("api_error", "record_error")
 # stop_reason values (as calls.csv writes them) that mean the answer never finished
@@ -62,6 +66,7 @@ SCORED_EXTRA = [
     "strict_correct",
     "lenient_correct",
     "aliases_sha",
+    "manual_apis_sha",
     "ground_truth_sha",
 ]
 
@@ -78,7 +83,7 @@ def norm(s: str) -> str:
 class Match:
     api_id: str | None  # API 1
     names: list[str]
-    method: str  # exact | contains | multiple | none | code | code_multiple
+    method: str  # exact | contains | multiple | none | code | code_multiple | manual
     ids: list[str] = field(default_factory=list)  # every API, API 1 first
 
 
@@ -198,7 +203,7 @@ def drop_superseded(rows: list[dict]) -> list[dict]:
     return [r for r in rows if r.get("status") == "ok" or _slot(r) not in ok]
 
 
-def classify(row: dict, text: str, table: AliasTable, gt: dict | None) -> dict:
+def classify(row: dict, text: str, table: AliasTable, gt: dict | None, manual: list[str] | None = None) -> dict:
     out = {k: "" for k in SCORED_EXTRA}
     refused = str(row.get("refused")).lower() == "true"
     if row.get("status") in ERROR_STATUSES:
@@ -219,6 +224,8 @@ def classify(row: dict, text: str, table: AliasTable, gt: dict | None) -> dict:
                 m = Match(None, [], "none")
             else:
                 m = table.match_name(row.get("api", ""))
+        if manual and not out["status"]:
+            m = Match(manual[0], m.names, "manual", list(manual))
         out["matched_names"] = "; ".join(m.names)
         out["match_method"] = m.method
         if not out["status"]:
@@ -290,15 +297,20 @@ def main(argv: list[str] | None = None) -> int:
     results_dir = Path(args.results_dir)
     table = AliasTable(load_aliases(task))
     gt = load_ground_truth(task)
+    manual = load_manual_apis(task)
     rows, texts = load_calls(task, results_dir, args.include_probe)
     if not rows:
         sys.exit(f"No calls found under {results_dir / task.name}")
 
     a_sha, g_sha = _sha(task.path / "aliases.yaml"), _sha(task.path / "ground_truth.yaml")
+    m_sha = _sha(task.path / "manual_apis.yaml")
+    unknown = set(manual) - {r["call_id"] for r in rows}
+    if unknown:
+        sys.exit(f"manual_apis.yaml lists calls that are not in the results: {sorted(unknown)}")
     scored = []
     for r in rows:
-        extra = classify(r, texts.get(r["call_id"], ""), table, gt)
-        extra["aliases_sha"], extra["ground_truth_sha"] = a_sha, g_sha
+        extra = classify(r, texts.get(r["call_id"], ""), table, gt, manual.get(r["call_id"]))
+        extra["aliases_sha"], extra["manual_apis_sha"], extra["ground_truth_sha"] = a_sha, m_sha, g_sha
         scored.append({**r, **extra})
 
     out_dir = results_dir / task.name

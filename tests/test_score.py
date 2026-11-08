@@ -58,6 +58,17 @@ def test_two_apis_are_kept_and_graded_on_the_best(table):
     assert classify(row("Google Document AI or AWS Textract"), "", table, GT)["canonical_api"] == "google_docai"
 
 
+def test_manual_apis_replace_the_alias_match(table):
+    # A hand classification wins over the alias table; Tesseract is self-hosted, so it grades off-list
+    # and the answer is graded on Azure.
+    out = classify(row("Amazon Textract"), "", table, GT, manual=["tesseract", "azure_di"])
+    assert out["match_method"] == "manual"
+    assert (out["canonical_api"], out["canonical_api_2"], out["n_apis"]) == ("tesseract", "azure_di", 2)
+    assert out["status"] == "correct" and out["graded_api"] == "azure_di"
+    # it does not override a failed call
+    assert classify(row("", status="api_error"), "", table, GT, manual=["azure_di"])["status"] == "api_error"
+
+
 def test_multi_api_grading_rules(table):
     ids = ["aws_textract", "azure_di"]
     assert grade_apis(ids, "j1", table, GT, "best") == ("azure_di", "correct")

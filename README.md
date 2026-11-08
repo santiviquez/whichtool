@@ -89,7 +89,7 @@ API keys come from the environment:
 
 ## Scoring
 
-The scorer maps each answer to a canonical API id through `aliases.yaml` (names for stated answers, code signatures such as imports and hostnames for the code study), then grades it:
+The scorer maps each answer to a canonical API id through `aliases.yaml` (names for stated answers, code signatures such as imports and hostnames for the code study), then grades it. A call listed in the optional `manual_apis.yaml` gets the APIs listed there instead (`match_method` "manual"); for doc-processing these are the 2 answers Santiago reclassified in his review, saved in `results/doc-processing/review/`.
 
 | Status | Meaning | Strict | Lenient |
 |---|---|---|---|

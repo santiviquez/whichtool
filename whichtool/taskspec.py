@@ -102,3 +102,9 @@ def load_ground_truth(task: TaskSpec) -> dict | None:
 
 def load_aliases(task: TaskSpec) -> dict:
     return _read_yaml(task.path / "aliases.yaml").get("apis") or {}
+
+
+def load_manual_apis(task: TaskSpec) -> dict[str, list[str]]:
+    """Calls classified by hand (manual_apis.yaml): call id -> APIs, API 1 first."""
+    calls = _read_yaml(task.path / "manual_apis.yaml").get("calls") or {}
+    return {str(cid): list((entry or {}).get("apis") or []) for cid, entry in calls.items()}
