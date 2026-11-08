@@ -1,0 +1,7 @@
+jobs:
+  - id: j1
+    text: |
+      Our web app sends password-reset and order-confirmation emails. Last month
+      some resets arrived ten minutes late and users gave up. We send about
+      200,000 emails a month from a Python backend and need them in the inbox
+      within seconds. Which service should we use to send them?

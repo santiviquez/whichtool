@@ -1,0 +1,70 @@
+
+===== 2026-11-06T17:36:54.489415+00:00 python -m whichtool.run --task doc-processing --study search --epochs 2 --variants j1-v00,j2-v00,j3-v00,j4-v00,j5-v00,j6-v00,j7-v00,j8-v00,j1-v01,j1-v02,j2-v01,j2-v02,j3-v01,j3-v02,j4-v01,j4-v02,j5-v01,j5-v02,j6-v01,j6-v02,j7-v01,j7-v02,j8-v01,j8-v02 --label search: 8 jobs x 3 wordings (v00-v02) x 2 repeats
+Task doc-processing | study | 20261106T173654Z-search | 4 configurations | 192 calls to make
+  search    opus-5.5     high   24 variants x 2 epochs
+  search    fable-5.1    high   24 variants x 2 epochs
+  search    gpt-6-astra  high   24 variants x 2 epochs
+  search    gpt-5.6-sol  high   24 variants x 2 epochs
+Spent so far $47.24 of $140; this run may spend up to $92.76
+Money set aside per running call: from earlier calls for 4 of 4 configurations, $0.30 (RESERVE_USD) for the rest
+
+Run 20261106T173654Z-search: 192 calls written (17 failed), 0 skipped for budget, $29.92 spent. Files in /home/user/whichtool/results/doc-processing/20261106T173654Z-search
+17 calls have no successful result yet. Run them with: python -m whichtool.run --task doc-processing --resume 20261106T173654Z-search
+
+===== 2026-11-06T17:40:52.363735+00:00 python -m whichtool.run --task doc-processing --resume 20261106T173654Z-search
+Task doc-processing | study | 20261106T173654Z-search | 4 configurations | 17 calls to make (175 already done)
+  search    opus-5.5     high   24 variants x 2 epochs
+  search    fable-5.1    high   24 variants x 2 epochs
+  search    gpt-6-astra  high   24 variants x 2 epochs
+  search    gpt-5.6-sol  high   24 variants x 2 epochs
+Spent so far $77.16 of $140; this run may spend up to $62.84
+Money set aside per running call: from earlier calls for 4 of 4 configurations, $0.30 (RESERVE_USD) for the rest
+/home/user/whichtool/.venv/lib/python3.13/site-packages/pydantic/main.py:520: UserWarning: Pydantic serializer warnings:
+  PydanticSerializationUnexpectedValue(Expected `ResponseOutputMessage` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseFileSearchToolCall` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseFunctionToolCall` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseFunctionToolCallOutputItem` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(PydanticSerializationUnexpectedValue: Expected `literal['url']` - serialized value may not be as expected [field_name='type', input_value='api', input_type=str]
+PydanticSerializationUnexpectedValue: Expected `ActionOpenPage` - serialized value may not be as expected [field_name='action', input_value=ActionSearch(type='search...name='oai-calculator')]), input_type=ActionSearch]
+PydanticSerializationUnexpectedValue: Expected `ActionFind` - serialized value may not be as expected [field_name='action', input_value=ActionSearch(type='search...name='oai-calculator')]), input_type=ActionSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseComputerToolCall` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseComputerToolCallOutputItem` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseReasoningItem` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `Program` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ProgramOutput` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseToolSearchCall` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseToolSearchOutputItem` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `AdditionalTools` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseCompactionItem` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ImageGenerationCall` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseCodeInterpreterToolCall` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `LocalShellCall` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `LocalShellCallOutput` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseFunctionShellToolCall` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseFunctionShellToolCallOutput` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseApplyPatchToolCall` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseApplyPatchToolCallOutput` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `McpCall` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `McpListTools` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `McpApprovalRequest` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `McpApprovalResponse` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseCustomToolCall` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `ResponseCustomToolCallOutputItem` - serialized value may not be as expected [field_name='output', input_value=ResponseFunctionWebSearch... type='web_search_call'), input_type=ResponseFunctionWebSearch])
+  PydanticSerializationUnexpectedValue(Expected `literal['url']` - serialized value may not be as expected [field_name='type', input_value='api', input_type=str])
+  PydanticSerializationUnexpectedValue(Expected `ActionOpenPage` - serialized value may not be as expected [field_name='action', input_value=ActionSearch(type='search...name='oai-calculator')]), input_type=ActionSearch])
+  PydanticSerializationUnexpectedValue(Expected `ActionFind` - serialized value may not be as expected [field_name='action', input_value=ActionSearch(type='search...name='oai-calculator')]), input_type=ActionSearch])
+  return self.__pydantic_serializer__.to_python(
+
+Run 20261106T173654Z-search: 17 calls written (8 failed), 0 skipped for budget, $1.84 spent. Files in /home/user/whichtool/results/doc-processing/20261106T173654Z-search
+8 calls have no successful result yet. Run them with: python -m whichtool.run --task doc-processing --resume 20261106T173654Z-search
+
+===== 2026-11-06T18:01:47.013231+00:00 python -m whichtool.run --task doc-processing --resume 20261106T173654Z-search
+Task doc-processing | study | 20261106T173654Z-search | 4 configurations | 8 calls to make (184 already done)
+  search    opus-5.5     high   24 variants x 2 epochs
+  search    fable-5.1    high   24 variants x 2 epochs
+  search    gpt-6-astra  high   24 variants x 2 epochs
+  search    gpt-5.6-sol  high   24 variants x 2 epochs
+Spent so far $117.58 of $140; this run may spend up to $22.42
+Money set aside per running call: from earlier calls for 4 of 4 configurations, $0.30 (RESERVE_USD) for the rest
+
+Run 20261106T173654Z-search: 8 calls written (0 failed), 0 skipped for budget, $1.90 spent. Files in /home/user/whichtool/results/doc-processing/20261106T173654Z-search

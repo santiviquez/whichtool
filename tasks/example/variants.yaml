@@ -1,0 +1,8 @@
+frozen: false
+variants:
+  - id: j1-v01
+    job_id: j1
+    text: |
+      We need to send transactional emails (password resets, receipts) from a
+      Python service, around 200k a month. Delivery speed matters most: a reset
+      email that shows up minutes later is useless. What should we send them with?

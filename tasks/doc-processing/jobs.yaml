@@ -1,0 +1,89 @@
+# The original job descriptions. Each job is sent to the models as-is
+# (variant v00) and is the source for the rephrased variants in variants.yaml.
+# No tool or vendor names. Only the text is sent, so it alone has to make
+# clear what matters most in the job (accuracy, latency, cost or ease of
+# integration). The comments are for us; models never see them.
+#
+# All eight were written by ChatGPT (candidates G1 to G10 in the candidate-jobs
+# doc). Santiago picked j1 to j5 on 2026-11-06; Claude picked j6 to j8 at his
+# request, for coverage, and fixed one sentence in j7 (G3 said both
+# "a backlog" and "every month"). Each need is tested twice, and invoices,
+# receipts and financial tables are tested for more than one need, so we can
+# see whether a model changes its pick when only the need changes.
+jobs:
+  # invoices, need: accuracy (candidate G1)
+  - id: j1
+    text: >-
+      We process about 25,000 supplier invoices a month. They're PDFs, mostly in English and
+      German. Around 40% are scans with skewed pages, faded text, or stamps over the amounts.
+      Our Python backend needs JSON with supplier details, invoice numbers, taxes, totals, and
+      every line item. A wrong quantity or decimal can lead to an incorrect payment, and our
+      finance team is tired of correcting these manually. We're willing to pay more and wait
+      longer if it means fewer mistakes. Which API should we use?
+  # invoices, need: ease of integration (candidate G4)
+  - id: j2
+    text: >-
+      We're a two-person development team adding invoice extraction to an existing TypeScript
+      web app. We receive around 300 English invoices a week, mostly clean digital PDFs with a
+      few sharp 300 dpi scans. We need invoice number, supplier, date, and total returned as
+      JSON. Our pilot starts next week, and we can't spend days building queues, mapping
+      templates, or training anything. Ideally, we send a file through a simple HTTP request
+      and get the fields back without managing extra infrastructure. Which API should we use?
+  # invoices, need: cost (candidate G7)
+  - id: j3
+    text: >-
+      We archive 1.2 million invoice pages every month. About 95% are clean digital PDFs, and
+      the rest are high-quality scans. They're in English and Italian. Our Python batch
+      pipeline needs only supplier ID, invoice date, currency, and total, saved as JSON. We
+      already validate the extracted amounts against our accounting records. Processing can
+      run overnight, and occasional retries are fine. We have a strict monthly budget of
+      $4,800 for extraction, and paying for features we don't use makes no sense. Which API
+      should we use?
+  # financial tables, need: accuracy (candidate G5)
+  - id: j4
+    text: >-
+      We're extracting financial tables from 8,000 annual reports each month. Most are digital
+      PDFs, but some contain scanned pages with small text. They're in English and French. Our
+      Java service needs CSV tables with row labels, column headers, units, negative numbers,
+      and footnote references preserved. Merged cells and multi-level headers are especially
+      painful. One misplaced number can change an entire financial comparison. Analysts can
+      wait for results, and our budget is flexible, but manually checking thousands of cells
+      defeats the purpose. Which API should we use?
+  # financial tables, need: latency (candidate G10)
+  - id: j5
+    text: >-
+      We're building a web interface where analysts upload financial statements and
+      immediately preview the extracted tables. We expect 20,000 pages daily, mostly clean
+      English digital PDFs with occasional high-quality scans. Each page contains one to three
+      financial tables. Our TypeScript backend needs cell values, headers, and row labels as
+      structured JSON. Analysts verify the numbers before exporting, so minor extraction
+      mistakes can be corrected. The problem is that users abandon the preview when a page
+      takes more than five seconds to process. Which API should we use?
+  # receipts, need: latency (candidate G2)
+  - id: j6
+    text: >-
+      We're building an expense app where people photograph receipts and see the extracted
+      details immediately. We expect 75,000 JPEG images daily, mostly English and Portuguese,
+      with shadows, folds, and uneven lighting. Our Go backend needs the merchant, date, tax,
+      and total returned as JSON. Users are staring at their phones while this happens, and
+      many abandon the flow after three seconds. We can handle occasional errors through user
+      corrections, but processing each receipt in a batch later isn't an option. Which API
+      should we use?
+  # receipts, need: cost (candidate G3, one sentence fixed)
+  - id: j7
+    text: >-
+      We process three million receipts every month for an expense analytics project. They're
+      JPEGs and scanned PDFs, mostly English and Spanish, with mixed quality. Our Python
+      workers only need the merchant, date, currency, and total as JSON. Nobody waits for the
+      results, and we can spread processing across several days. We already have rules to flag
+      suspicious amounts for review. Our budget is $15,000 a month, so even a small difference
+      in the price per page adds up quickly. Which API should we use?
+  # printed paper forms, need: ease of integration (candidate G8)
+  - id: j8
+    text: >-
+      I maintain a small registration system for a nonprofit. We receive around 500 paper
+      forms each week, scanned at 300 dpi into PDFs. They're all in English, with printed
+      names, dates, addresses, and checkboxes. Our backend is in Java, and we need the fields
+      returned as predictable JSON. I'm the only developer maintaining this system, and I have
+      a week to ship the feature. I can't label training data, maintain custom models, or
+      build complicated document workflows. Which API should we use?

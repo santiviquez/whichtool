@@ -1,0 +1,97 @@
+
+===== 2026-11-06T17:22:12.272699+00:00 python -m whichtool.run --task doc-processing --study headline --epochs 5 --max-usd 50 --label headline: 8 jobs x 5 wordings x 5 repeats
+Task doc-processing | study | 20261106T172212Z-headline | 12 configurations | 2400 calls to make
+  headline  opus-5.5     medium 40 variants x 5 epochs
+  headline  opus-5.5     high   40 variants x 5 epochs
+  headline  opus-5.5     xhigh  40 variants x 5 epochs
+  headline  fable-5.1    medium 40 variants x 5 epochs
+  headline  fable-5.1    high   40 variants x 5 epochs
+  headline  fable-5.1    xhigh  40 variants x 5 epochs
+  headline  gpt-6-astra  medium 40 variants x 5 epochs
+  headline  gpt-6-astra  high   40 variants x 5 epochs
+  headline  gpt-6-astra  xhigh  40 variants x 5 epochs
+  headline  gpt-5.6-sol  medium 40 variants x 5 epochs
+  headline  gpt-5.6-sol  high   40 variants x 5 epochs
+  headline  gpt-5.6-sol  xhigh  40 variants x 5 epochs
+Spent so far $2.58 of $110; this run may spend up to $50.00
+Money set aside per running call: from earlier calls for 12 of 12 configurations, $0.30 (RESERVE_USD) for the rest
+
+Stopping headline gpt-5.6-sol xhigh: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Stopping headline gpt-6-astra high: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Stopping headline gpt-6-astra xhigh: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Run 20261106T172212Z-headline: 2010 calls written (3 failed), 0 skipped for budget, $43.78 spent. Files in /home/user/whichtool/results/doc-processing/20261106T172212Z-headline
+Stopped headline gpt-5.6-sol xhigh after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+Stopped headline gpt-6-astra high after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+Stopped headline gpt-6-astra xhigh after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+393 calls have no successful result yet. Run them with: python -m whichtool.run --task doc-processing --resume 20261106T172212Z-headline
+
+===== 2026-11-06T17:34:25.874674+00:00 python -m whichtool.run --task doc-processing --resume 20261106T172212Z-headline
+Task doc-processing | study | 20261106T172212Z-headline | 12 configurations | 393 calls to make (2007 already done)
+  headline  opus-5.5     medium 40 variants x 5 epochs
+  headline  opus-5.5     high   40 variants x 5 epochs
+  headline  opus-5.5     xhigh  40 variants x 5 epochs
+  headline  fable-5.1    medium 40 variants x 5 epochs
+  headline  fable-5.1    high   40 variants x 5 epochs
+  headline  fable-5.1    xhigh  40 variants x 5 epochs
+  headline  gpt-6-astra  medium 40 variants x 5 epochs
+  headline  gpt-6-astra  high   40 variants x 5 epochs
+  headline  gpt-6-astra  xhigh  40 variants x 5 epochs
+  headline  gpt-5.6-sol  medium 40 variants x 5 epochs
+  headline  gpt-5.6-sol  high   40 variants x 5 epochs
+  headline  gpt-5.6-sol  xhigh  40 variants x 5 epochs
+Spent so far $46.36 of $110; this run may spend up to $63.64
+Money set aside per running call: from earlier calls for 12 of 12 configurations, $0.30 (RESERVE_USD) for the rest
+
+Stopping headline gpt-6-astra high: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Stopping headline gpt-5.6-sol xhigh: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Stopping headline gpt-6-astra xhigh: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Run 20261106T172212Z-headline: 23 calls written (4 failed), 0 skipped for budget, $0.88 spent. Files in /home/user/whichtool/results/doc-processing/20261106T172212Z-headline
+Stopped headline gpt-6-astra high after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+Stopped headline gpt-5.6-sol xhigh after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+Stopped headline gpt-6-astra xhigh after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+374 calls have no successful result yet. Run them with: python -m whichtool.run --task doc-processing --resume 20261106T172212Z-headline
+
+===== 2026-11-06T18:02:48.661476+00:00 python -m whichtool.run --task doc-processing --resume 20261106T172212Z-headline
+Task doc-processing | study | 20261106T172212Z-headline | 12 configurations | 374 calls to make (2026 already done)
+  headline  opus-5.5     medium 40 variants x 5 epochs
+  headline  opus-5.5     high   40 variants x 5 epochs
+  headline  opus-5.5     xhigh  40 variants x 5 epochs
+  headline  fable-5.1    medium 40 variants x 5 epochs
+  headline  fable-5.1    high   40 variants x 5 epochs
+  headline  fable-5.1    xhigh  40 variants x 5 epochs
+  headline  gpt-6-astra  medium 40 variants x 5 epochs
+  headline  gpt-6-astra  high   40 variants x 5 epochs
+  headline  gpt-6-astra  xhigh  40 variants x 5 epochs
+  headline  gpt-5.6-sol  medium 40 variants x 5 epochs
+  headline  gpt-5.6-sol  high   40 variants x 5 epochs
+  headline  gpt-5.6-sol  xhigh  40 variants x 5 epochs
+Spent so far $119.47 of $140; this run may spend up to $20.53
+Money set aside per running call: from earlier calls for 12 of 12 configurations, $0.30 (RESERVE_USD) for the rest
+
+Run 20261106T172212Z-headline: 374 calls written (3 failed), 0 skipped for budget, $18.41 spent. Files in /home/user/whichtool/results/doc-processing/20261106T172212Z-headline
+3 calls have no successful result yet. Run them with: python -m whichtool.run --task doc-processing --resume 20261106T172212Z-headline
+
+===== 2026-11-06T18:24:28.894872+00:00 python -m whichtool.run --task doc-processing --resume 20261106T172212Z-headline
+Task doc-processing | study | 20261106T172212Z-headline | 12 configurations | 3 calls to make (2397 already done)
+  headline  opus-5.5     medium 40 variants x 5 epochs
+  headline  opus-5.5     high   40 variants x 5 epochs
+  headline  opus-5.5     xhigh  40 variants x 5 epochs
+  headline  fable-5.1    medium 40 variants x 5 epochs
+  headline  fable-5.1    high   40 variants x 5 epochs
+  headline  fable-5.1    xhigh  40 variants x 5 epochs
+  headline  gpt-6-astra  medium 40 variants x 5 epochs
+  headline  gpt-6-astra  high   40 variants x 5 epochs
+  headline  gpt-6-astra  xhigh  40 variants x 5 epochs
+  headline  gpt-5.6-sol  medium 40 variants x 5 epochs
+  headline  gpt-5.6-sol  high   40 variants x 5 epochs
+  headline  gpt-5.6-sol  xhigh  40 variants x 5 epochs
+Spent so far $137.88 of $140; this run may spend up to $2.12
+Money set aside per running call: from earlier calls for 12 of 12 configurations, $0.30 (RESERVE_USD) for the rest
+
+Run 20261106T172212Z-headline: 3 calls written (0 failed), 0 skipped for budget, $0.14 spent. Files in /home/user/whichtool/results/doc-processing/20261106T172212Z-headline

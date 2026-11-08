@@ -1,0 +1,18 @@
+# Canonical id -> names a model may use, and code signatures (imports,
+# packages, hostnames) that show the API is being called.
+apis:
+  postmark:
+    names: [Postmark, Postmark API, ActiveCampaign Postmark]
+    code: [postmarker, postmarkapp.com, "import postmark"]
+  sendgrid:
+    names: [SendGrid, Twilio SendGrid]
+    code: [sendgrid, api.sendgrid.com]
+  amazon_ses:
+    names: [Amazon SES, AWS SES, Amazon Simple Email Service, SES]
+    code: ["boto3.client('ses'", 'boto3.client("ses"', "sesv2", email.us-east-1.amazonaws.com]
+  mailgun:
+    names: [Mailgun, Sinch Mailgun]
+    code: [api.mailgun.net, mailgun]
+  resend:
+    names: [Resend]
+    code: ["import resend", api.resend.com]

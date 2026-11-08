@@ -1,0 +1,107 @@
+===== reconstructed from the terminal logs of the four probe sessions (console.log did not exist yet)
+===== session 1: python -m whichtool.run --task doc-processing --probe --label "first probe"
+Task doc-processing | probe | 20261106T163744Z-probe | 20 configurations | 40 calls to make
+  headline  opus-5.5     medium 2 variants x 1 epochs
+  headline  opus-5.5     high   2 variants x 1 epochs
+  headline  opus-5.5     xhigh  2 variants x 1 epochs
+  headline  fable-5.1    medium 2 variants x 1 epochs
+  headline  fable-5.1    high   2 variants x 1 epochs
+  headline  fable-5.1    xhigh  2 variants x 1 epochs
+  headline  gpt-6-astra  medium 2 variants x 1 epochs
+  headline  gpt-6-astra  high   2 variants x 1 epochs
+  headline  gpt-6-astra  xhigh  2 variants x 1 epochs
+  headline  gpt-5.6-sol  medium 2 variants x 1 epochs
+  headline  gpt-5.6-sol  high   2 variants x 1 epochs
+  headline  gpt-5.6-sol  xhigh  2 variants x 1 epochs
+  search    opus-5.5     high   2 variants x 1 epochs
+  search    fable-5.1    high   2 variants x 1 epochs
+  search    gpt-6-astra  high   2 variants x 1 epochs
+  search    gpt-5.6-sol  high   2 variants x 1 epochs
+  code      opus-5.5     high   2 variants x 1 epochs
+  code      fable-5.1    high   2 variants x 1 epochs
+  code      gpt-6-astra  high   2 variants x 1 epochs
+  code      gpt-5.6-sol  high   2 variants x 1 epochs
+Spent so far $0.00 of $100; this run may spend up to $5.00
+Money set aside per running call: from earlier calls for 0 of 20 configurations, $0.30 (RESERVE_USD) for the rest
+
+Run 20261106T163744Z-probe: 40 calls written (20 failed), 0 skipped for budget, $0.81 spent. Files in /home/user/whichtool/results/doc-processing/20261106T163744Z-probe
+20 calls have no successful result yet. Run them with: python -m whichtool.run --task doc-processing --resume 20261106T163744Z-probe
+exit 0
+===== session 2: python -m whichtool.run --task doc-processing --resume 20261106T163744Z-probe
+Task doc-processing | probe | 20261106T163744Z-probe | 20 configurations | 20 calls to make (20 already done)
+  headline  opus-5.5     medium 2 variants x 1 epochs
+  headline  opus-5.5     high   2 variants x 1 epochs
+  headline  opus-5.5     xhigh  2 variants x 1 epochs
+  headline  fable-5.1    medium 2 variants x 1 epochs
+  headline  fable-5.1    high   2 variants x 1 epochs
+  headline  fable-5.1    xhigh  2 variants x 1 epochs
+  headline  gpt-6-astra  medium 2 variants x 1 epochs
+  headline  gpt-6-astra  high   2 variants x 1 epochs
+  headline  gpt-6-astra  xhigh  2 variants x 1 epochs
+  headline  gpt-5.6-sol  medium 2 variants x 1 epochs
+  headline  gpt-5.6-sol  high   2 variants x 1 epochs
+  headline  gpt-5.6-sol  xhigh  2 variants x 1 epochs
+  search    opus-5.5     high   2 variants x 1 epochs
+  search    fable-5.1    high   2 variants x 1 epochs
+  search    gpt-6-astra  high   2 variants x 1 epochs
+  search    gpt-5.6-sol  high   2 variants x 1 epochs
+  code      opus-5.5     high   2 variants x 1 epochs
+  code      fable-5.1    high   2 variants x 1 epochs
+  code      gpt-6-astra  high   2 variants x 1 epochs
+  code      gpt-5.6-sol  high   2 variants x 1 epochs
+Spent so far $0.81 of $100; this run may spend up to $4.19
+Money set aside per running call: from earlier calls for 10 of 20 configurations, $0.30 (RESERVE_USD) for the rest
+
+Stopping headline gpt-5.6-sol medium: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Stopping headline gpt-6-astra medium: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Stopping search gpt-6-astra high: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Stopping headline gpt-6-astra xhigh: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Stopping code gpt-6-astra high: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Run 20261106T163744Z-probe: 19 calls written (5 failed), 0 skipped for budget, $0.96 spent. Files in /home/user/whichtool/results/doc-processing/20261106T163744Z-probe
+Stopped headline gpt-5.6-sol medium after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+Stopped headline gpt-6-astra medium after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+Stopped search gpt-6-astra high after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+Stopped headline gpt-6-astra xhigh after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+Stopped code gpt-6-astra high after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+6 calls have no successful result yet. Run them with: python -m whichtool.run --task doc-processing --resume 20261106T163744Z-probe
+exit 0
+===== session 3: same command
+Task doc-processing | probe | 20261106T163744Z-probe | 20 configurations | 6 calls to make (34 already done)
+  headline  opus-5.5     medium 2 variants x 1 epochs
+  headline  opus-5.5     high   2 variants x 1 epochs
+  headline  opus-5.5     xhigh  2 variants x 1 epochs
+  headline  fable-5.1    medium 2 variants x 1 epochs
+  headline  fable-5.1    high   2 variants x 1 epochs
+  headline  fable-5.1    xhigh  2 variants x 1 epochs
+  headline  gpt-6-astra  medium 2 variants x 1 epochs
+  headline  gpt-6-astra  high   2 variants x 1 epochs
+  headline  gpt-6-astra  xhigh  2 variants x 1 epochs
+  headline  gpt-5.6-sol  medium 2 variants x 1 epochs
+  headline  gpt-5.6-sol  high   2 variants x 1 epochs
+  headline  gpt-5.6-sol  xhigh  2 variants x 1 epochs
+  search    opus-5.5     high   2 variants x 1 epochs
+  search    fable-5.1    high   2 variants x 1 epochs
+  search    gpt-6-astra  high   2 variants x 1 epochs
+  search    gpt-5.6-sol  high   2 variants x 1 epochs
+  code      opus-5.5     high   2 variants x 1 epochs
+  code      fable-5.1    high   2 variants x 1 epochs
+  code      gpt-6-astra  high   2 variants x 1 epochs
+  code      gpt-5.6-sol  high   2 variants x 1 epochs
+Spent so far $1.77 of $100; this run may spend up to $3.23
+Money set aside per running call: from earlier calls for 19 of 20 configurations, $0.30 (RESERVE_USD) for the rest
+
+Stopping headline gpt-5.6-sol medium: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+
+Run 20261106T163744Z-probe: 6 calls written (1 failed), 0 skipped for budget, $0.80 spent. Files in /home/user/whichtool/results/doc-processing/20261106T163744Z-probe
+Stopped headline gpt-5.6-sol medium after an error that would repeat on every call: APIError: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+1 calls have no successful result yet. Run them with: python -m whichtool.run --task doc-processing --resume 20261106T163744Z-probe
+exit 0
+===== session 4: same command (only the last lines were kept)
+Money set aside per running call: from earlier calls for 20 of 20 configurations, $0.30 (RESERVE_USD) for the rest
+
+Run 20261106T163744Z-probe: 1 calls written (0 failed), 0 skipped for budget, $0.00 spent. Files in /home/user/whichtool/results/doc-processing/20261106T163744Z-probe

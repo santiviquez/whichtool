@@ -1,0 +1,31 @@
+[project]
+name = "whichtool"
+version = "0.1.0"
+description = "Benchmark: how often do frontier models pick the best tool for a job?"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=2.4.0",
+    "openai>=3.42.1",
+    "pyyaml>=6.0",
+    "scipy>=1.18",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+whichtool-run = "whichtool.run:main"
+whichtool-score = "whichtool.score:main"
+whichtool-report = "whichtool.report:main"
+whichtool-estimate = "whichtool.estimate:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["whichtool"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

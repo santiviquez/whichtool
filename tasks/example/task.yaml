@@ -1,0 +1,4 @@
+name: example
+description: >
+  Smoke-test task for checking the harness end to end. Not part of the
+  benchmark: its job is made up and it has no real ground truth.
