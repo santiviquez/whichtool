@@ -98,15 +98,15 @@ API keys come from the environment:
 
 ## Results
 
-[`results/doc-processing/results.csv`](results/doc-processing/results.csv) is the one file to analyse: one row per call (2,784: 2,400 headline, 192 search, 192 code; the cost probe is left out), with
+[`results/doc-processing/results.csv`](results/doc-processing/results.csv) is the one file to analyse: one row per call (3,360: 2,880 headline, 240 search, 240 code; the cost probe is left out), with
 
-- **the call:** `call_id`, `experiment` (headline, search, code), `model`, `effort`, `job`, `wording` (`j1-v00` to `j8-v04`), `wording_by` (ChatGPT wrote v00, Claude v01 to v04), `repeat`;
+- **the call:** `call_id`, `experiment` (headline, search, code), `model`, `effort`, `job`, `wording` (`j1-v00` to `j10-v04`), `wording_by` (for j1 to j8, ChatGPT wrote v00 and Claude v01 to v04; ChatGPT wrote all of j9 and j10), `repeat`;
 - **what the model saw and said:** `question` (the user message), `answer` (the api field of a stated answer, or the whole reply in the code experiment), `reason`, `sentence`;
 - **the classification:** `api_1` to `api_3`, `n_apis`, `match_method` and `matched_on` (how it was matched), `review` (Santiago's review: `accepted`, `changed` or `accepted_in_bulk`), `status`;
 - **search:** `searched`, `n_searches`, `search_queries`, `cited_urls`;
 - **cost and run data:** tokens, `cost_usd`, `latency_s`, `model_returned`, `stop_reason`, `call_status`, `error`, `run_id`, timestamps, and the hashes of the prompts and alias files used.
 
-`classify.py` writes it from the run folders. Each answer is mapped to an API id through `aliases.yaml`: names for stated answers, code signatures such as imports and hostnames for the code experiment. A call listed in `manual_apis.yaml` gets the APIs listed there instead (`match_method` "manual"); for doc-processing these are the 2 answers Santiago reclassified in his review.
+`classify.py` writes it from the run folders. Each answer is mapped to an API id through `aliases.yaml`: names for stated answers, code signatures such as imports and hostnames for the code experiment. A call listed in `manual_apis.yaml` gets the APIs listed there instead (`match_method` "manual"); for doc-processing these are the 2 answers Santiago reclassified in his review of j1 to j8, and one j9 code answer that he counted as ABBYY only, because its OpenAI call is the job's own AI agent rather than the extraction API.
 
 | Status | Meaning |
 |---|---|
@@ -118,7 +118,9 @@ API keys come from the environment:
 | `unmapped` | no alias matched yet; fix the alias table and rerun |
 | `api_error` | the call failed after all retries |
 
-All 2,784 calls are currently `mapped`.
+All 3,360 calls are currently `mapped`.
+
+**j9 and j10** (redlined contracts, as digital PDFs and as scans) were added on 2026-11-09 and run at the same settings as j1 to j8. ChatGPT wrote all their wordings. Only the four rewordings of each job were provided, so they have no `v00`: the headline study uses `v01` to `v04`, and the search and code studies use `v01` to `v03` where j1 to j8 use `v00` to `v02`.
 
 An answer that names or calls more than one API (for example code that extracts with Azure Document Intelligence and then structures the result with the OpenAI API) keeps every one: in a stated answer `api_1` is the one named first; in code it is the one listed first in `aliases.yaml`. Self-hosted helpers found in code (such as PyMuPDF for rendering pages) are dropped when the code also calls a hosted API.
 
