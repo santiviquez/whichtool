@@ -8,7 +8,7 @@ Each prompt describes a real job (the first task: processing documents) without 
 - **Effort:** medium, high and xhigh on every model, set explicitly on every call (12 configurations).
 - **Headline study:** all 12 configurations, no web search, the stated recommendation.
 - **Side studies, at high effort:** each vendor's own web search available (not requested), and the API the model actually calls when asked to write the integration code.
-- **Budget:** at most $174 of API calls in total (`BUDGET_USD` in config.py, raised from $100 to $140 for j1 to j8, then to $174 for j9 and j10), enforced by the harness.
+- **Budget:** at most $210 of API calls in total (`BUDGET_USD` in config.py, raised from $100 to $140 for j1 to j8, then to $210 for j9 and j10), enforced by the harness.
 
 Everything is public: prompts, every request and response, and the classified results.
 
@@ -126,7 +126,7 @@ Grading against a ground truth is not in the repo yet. The grading and report co
 
 ## Budget guard
 
-`results/` is the ledger: before a run starts, the harness adds up `cost_usd` over every `calls.csv` and refuses to spend past `BUDGET_USD` ($174) in total (or past $5 across probe runs). During a run, a call only starts if the money already spent plus an amount set aside for every running call stays under the cap; otherwise it is recorded as `skipped_budget`. The amount set aside for a call is the most expensive successful call seen so far for its configuration (from the probe, an earlier run, or earlier in the same run), or `RESERVE_USD` ($0.30) before there is one. Because running calls are only estimated, a cap can be overshot by the difference between those estimates and what the calls really cost. A call that started (its id is in `started.txt`) but never reached `calls.csv`, because the process was killed, is counted at its set-aside amount, so the ledger never forgets money that may have been spent. Cost is computed from the token counts in each raw response at the list prices in [`whichtool/config.py`](whichtool/config.py), plus $10 per 1,000 web searches. A spend limit in each vendor's console is a good backstop.
+`results/` is the ledger: before a run starts, the harness adds up `cost_usd` over every `calls.csv` and refuses to spend past `BUDGET_USD` ($210) in total (or past $5 across probe runs). During a run, a call only starts if the money already spent plus an amount set aside for every running call stays under the cap; otherwise it is recorded as `skipped_budget`. The amount set aside for a call is the most expensive successful call seen so far for its configuration (from the probe, an earlier run, or earlier in the same run), or `RESERVE_USD` ($0.30) before there is one. Because running calls are only estimated, a cap can be overshot by the difference between those estimates and what the calls really cost. A call that started (its id is in `started.txt`) but never reached `calls.csv`, because the process was killed, is counted at its set-aside amount, so the ledger never forgets money that may have been spent. Cost is computed from the token counts in each raw response at the list prices in [`whichtool/config.py`](whichtool/config.py), plus $10 per 1,000 web searches. A spend limit in each vendor's console is a good backstop.
 
 ## Adding a task
 
