@@ -1,0 +1,13 @@
+
+===== 2026-11-09T23:29:17.888740+00:00 python -m whichtool.run --task doc-processing --study search --epochs 2 --variants j9-v01,j9-v02,j9-v03,j10-v01,j10-v02,j10-v03 --label search: j9 and j10 x 3 wordings (v01-v03) x 2 repeats
+Task doc-processing | study | 20261109T232917Z-search | 4 configurations | 48 calls to make
+  search    opus-5.5     high   6 variants x 2 epochs
+  search    fable-5.1    high   6 variants x 2 epochs
+  search    gpt-6-astra  high   6 variants x 2 epochs
+  search    gpt-5.6-sol  high   6 variants x 2 epochs
+Spent so far $167.89 of $174; this run may spend up to $6.11
+Money set aside per running call: from earlier calls for 4 of 4 configurations, $0.30 (RESERVE_USD) for the rest
+Expected cost of the 48 calls: about $8.36 (mean cost of earlier calls of the same configuration, on any job)
+
+Run 20261109T232917Z-search: 24 calls written (0 failed), 24 skipped for budget, $7.68 spent. Files in /home/user/whichtool/results/doc-processing/20261109T232917Z-search
+24 calls have no successful result yet. Run them with: python -m whichtool.run --task doc-processing --resume 20261109T232917Z-search
