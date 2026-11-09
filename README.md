@@ -76,7 +76,7 @@ API keys come from the environment:
 
 ## Workflow for a task
 
-1. **Jobs.** The task owner writes 4 to 6 jobs in `tasks/<task>/jobs.yaml`, each stressing a different need (accuracy, latency, cost, ease of integration). Only the `id` and `text` are read, and the text is all a model sees. The original text of each job is variant `v00`.
+1. **Jobs.** The task owner writes 4 to 6 jobs in `tasks/<task>/jobs.yaml`, each stressing a different need (accuracy, latency, cost, ease of integration). The text is all a model sees. The original text of each job is variant `v00`. An optional `by` on a job or variant says who wrote that wording (default: ChatGPT for `v00`, Claude for the rest); it goes into `wording_by` in the results and is not part of the prompts.
 2. **Variants.** Rephrased variants go in `tasks/<task>/variants.yaml`, written without seeing the ground truth. The task owner checks them for vendor-specific terms, then sets `frozen: true`. Study runs refuse to start before that.
 3. **Cost probe.** Two calls per configuration of every study, capped at $5:
    ```bash
@@ -89,7 +89,7 @@ API keys come from the environment:
    python -m whichtool.run --task doc-processing --study search --epochs 3
    python -m whichtool.run --task doc-processing --study code --epochs 3
    ```
-   `--dry-run` prints the plan and the remaining budget without calling anything. `--models`, `--efforts`, `--jobs`, `--variants` and `--max-usd` narrow a run. If a run stops or some calls fail, finish it with `python -m whichtool.run --task doc-processing --resume <run_id>` (the command is printed at the end of the run).
+   `--dry-run` prints the plan, the remaining budget and the expected cost (the mean cost of earlier calls of the same configuration) without calling anything. `--models`, `--efforts`, `--jobs`, `--variants` and `--max-usd` narrow a run. If a run stops or some calls fail, finish it with `python -m whichtool.run --task doc-processing --resume <run_id>` (the command is printed at the end of the run).
 5. **Classify.**
    ```bash
    python -m whichtool.classify --task doc-processing   # -> results/<task>/results.csv

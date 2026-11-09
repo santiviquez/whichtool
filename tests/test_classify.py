@@ -126,12 +126,12 @@ def test_code_ignores_comments_prose_and_helpers(table):
 def test_result_row_has_every_column(table):
     r = row("Azure AI Document Intelligence", call_id="c1", model="m", effort="high", variant_id="j1-v00", epoch="1")
     out = result_row(r, classify(r, "", table), {"output_text": "", "urls": ["https://x.test/a", "https://x.test/b"]},
-                     "Which API?", "accepted", {"aliases": "a", "manual_apis": ""})
+                     "Which API?", "accepted", {"aliases": "a", "manual_apis": ""}, "ChatGPT")
     assert set(out) == set(RESULT_COLUMNS)
     assert out["api_1"] == "azure_di" and out["answer"] == "Azure AI Document Intelligence" and out["status"] == "mapped"
     assert out["wording_by"] == "ChatGPT" and out["question"] == "Which API?" and out["review"] == "accepted"
     assert out["cited_urls"] == "https://x.test/a https://x.test/b" and out["call_status"] == "ok"
     assert out["aliases_sha"] == "a"
     code = row("", study="code", call_id="c2", variant_id="j1-v01")
-    out = result_row(code, classify(code, "x", table), {"output_text": "the whole reply"}, "", "")
+    out = result_row(code, classify(code, "x", table), {"output_text": "the whole reply"}, "", "", None, "Claude")
     assert out["answer"] == "the whole reply" and out["wording_by"] == "Claude"
