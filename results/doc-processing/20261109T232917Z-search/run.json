@@ -247,6 +247,27 @@
       "spent_usd": 7.682732,
       "stopped_configurations": {},
       "calls_without_success_left": 24
+    },
+    {
+      "started_at": "2026-11-09T23:36:30.503444+00:00",
+      "git_commit": "2934c48",
+      "anthropic_sdk_version": "2.7.0",
+      "openai_sdk_version": "3.48.0",
+      "allowed_usd": 34.42692400000007,
+      "calls_to_make": 24,
+      "reserves_usd": {
+        "search opus-5.5 high": 0.417012,
+        "search fable-5.1 high": 0.79664,
+        "search gpt-6-astra high": 0.76266,
+        "search gpt-5.6-sol high": 0.37926
+      },
+      "finished_at": "2026-11-09T23:37:48.904429+00:00",
+      "calls_written": 24,
+      "calls_failed": 0,
+      "calls_skipped_for_budget": 0,
+      "spent_usd": 8.833888,
+      "stopped_configurations": {},
+      "calls_without_success_left": 0
     }
   ]
 }
