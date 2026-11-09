@@ -1,11 +1,12 @@
 # Rephrased variants of each job, written without seeing the ground truth.
+# Claude wrote the j1 to j8 rewordings, ChatGPT those of j9 and j10 (`by`).
 # Each keeps every fact of its job (documents, volume, languages, stack,
 # fields, constraints, budget) and changes only wording, order and tone:
 #   v01 plain rewrite, v02 short and casual, v03 the problem first,
 #   v04 the question first.
 # Set frozen: true once Santiago has checked them for vendor-specific terms;
 # study runs refuse to start until then.
-frozen: true  # frozen 2026-11-06 after Santiago checked the 32 rewordings
+frozen: true  # frozen 2026-11-06 after Santiago checked the 32 rewordings; j9 and j10 (ChatGPT's, final) added 2026-11-09
 variants:
   - id: j1-v01
     job_id: j1
@@ -303,3 +304,107 @@ variants:
       predictable JSON. I'm the only developer maintaining this small registration system, and
       I have a week to ship the feature. I can't label training data, maintain custom models
       or build complicated document workflows.
+  # j9 and j10: written by ChatGPT (pair 1, 2026-11-09), used as written. Each
+  # j10 wording is its j9 wording with the PDF-format sentence swapped.
+  - id: j9-v01
+    job_id: j9
+    by: ChatGPT
+    text: >-
+      Our team handles 450 negotiated SaaS and services contracts each month. Counterparties
+      provide them only as PDFs, never editable files. They're digital PDFs exported from a
+      word processor, with selectable text. The contracts are in English and run 20 to 40
+      pages. Several rounds of edits leave crossed-out wording visible beside replacements,
+      sometimes within a number, word, table cell, or definition. Our Python service sends
+      each PDF to an API, and an AI agent uses the extracted text to answer questions about
+      notice periods, liability caps, insurance limits, and approvals. Answers must follow
+      kept wording, never deleted terms. We'll pay more and wait longer for accuracy. Which
+      API should we use?
+  - id: j9-v02
+    job_id: j9
+    by: ChatGPT
+    text: >-
+      We get 450 negotiated SaaS and services contracts a month from counterparties, PDFs
+      only, never editable files. They're digital PDFs exported from a word processor, with
+      selectable text. All English, around 20 to 40 pages. After several edits, crossed-out
+      wording is still visible next to replacements, even within a number, word, table cell,
+      or definition. Our Python service sends each PDF to an API, then an AI agent uses the
+      text to answer questions about notice periods, liability caps, insurance limits, and
+      who approves what. It needs to use kept terms, not deleted ones. Getting that
+      distinction right matters most. Which API would you pick?
+  - id: j9-v03
+    job_id: j9
+    by: ChatGPT
+    text: >-
+      Our AI agent needs to answer contract questions using only the wording the parties
+      kept, never terms they crossed out. We receive 450 negotiated SaaS and services
+      contracts monthly from counterparties, only as PDFs, never editable files. They're
+      digital PDFs exported from a word processor, with selectable text. They're in English,
+      20 to 40 pages, with several rounds of edits. Deleted wording remains visible beside
+      replacements, sometimes inside a number, word, table cell, or definition. Our Python
+      service sends each PDF to an API and gives the extracted text to the agent for
+      questions about notice periods, liability caps, insurance limits, and approvals.
+      Accuracy is our priority. Which API would you recommend?
+  - id: j9-v04
+    job_id: j9
+    by: ChatGPT
+    text: >-
+      Which API should we use for extracting text from negotiated contracts? We receive 450
+      SaaS and services contracts monthly from counterparties, only as PDFs, never editable
+      files. They're digital PDFs exported from a word processor, with selectable text.
+      They're in English, 20 to 40 pages, and have gone through several edits. Crossed-out
+      wording remains visible beside replacements, sometimes within a number, word, table
+      cell, or definition. Our Python service sends each PDF to an API. An AI agent uses the
+      extracted text to answer questions about notice periods, liability caps, insurance
+      limits, and approvals. It must use kept wording, never deleted terms. Getting those
+      answers right is our main concern. What API would you choose?
+  - id: j10-v01
+    job_id: j10
+    by: ChatGPT
+    text: >-
+      Our team handles 450 negotiated SaaS and services contracts each month. Counterparties
+      provide them only as PDFs, never editable files. They're colour scans at about 200
+      dpi, images only, with no selectable text. The contracts are in English and run 20 to
+      40 pages. Several rounds of edits leave crossed-out wording visible beside
+      replacements, sometimes within a number, word, table cell, or definition. Our Python
+      service sends each PDF to an API, and an AI agent uses the extracted text to answer
+      questions about notice periods, liability caps, insurance limits, and approvals.
+      Answers must follow kept wording, never deleted terms. We'll pay more and wait longer
+      for accuracy. Which API should we use?
+  - id: j10-v02
+    job_id: j10
+    by: ChatGPT
+    text: >-
+      We get 450 negotiated SaaS and services contracts a month from counterparties, PDFs
+      only, never editable files. They're colour scans at about 200 dpi, images only, with
+      no selectable text. All English, around 20 to 40 pages. After several edits,
+      crossed-out wording is still visible next to replacements, even within a number, word,
+      table cell, or definition. Our Python service sends each PDF to an API, then an AI
+      agent uses the text to answer questions about notice periods, liability caps,
+      insurance limits, and who approves what. It needs to use kept terms, not deleted ones.
+      Getting that distinction right matters most. Which API would you pick?
+  - id: j10-v03
+    job_id: j10
+    by: ChatGPT
+    text: >-
+      Our AI agent needs to answer contract questions using only the wording the parties
+      kept, never terms they crossed out. We receive 450 negotiated SaaS and services
+      contracts monthly from counterparties, only as PDFs, never editable files. They're
+      colour scans at about 200 dpi, images only, with no selectable text. They're in
+      English, 20 to 40 pages, with several rounds of edits. Deleted wording remains visible
+      beside replacements, sometimes inside a number, word, table cell, or definition. Our
+      Python service sends each PDF to an API and gives the extracted text to the agent for
+      questions about notice periods, liability caps, insurance limits, and approvals.
+      Accuracy is our priority. Which API would you recommend?
+  - id: j10-v04
+    job_id: j10
+    by: ChatGPT
+    text: >-
+      Which API should we use for extracting text from negotiated contracts? We receive 450
+      SaaS and services contracts monthly from counterparties, only as PDFs, never editable
+      files. They're colour scans at about 200 dpi, images only, with no selectable text.
+      They're in English, 20 to 40 pages, and have gone through several edits. Crossed-out
+      wording remains visible beside replacements, sometimes within a number, word, table
+      cell, or definition. Our Python service sends each PDF to an API. An AI agent uses the
+      extracted text to answer questions about notice periods, liability caps, insurance
+      limits, and approvals. It must use kept wording, never deleted terms. Getting those
+      answers right is our main concern. What API would you choose?

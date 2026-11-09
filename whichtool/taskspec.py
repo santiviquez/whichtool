@@ -77,9 +77,11 @@ def load_task(name: str, tasks_dir: Path = TASKS_DIR) -> TaskSpec:
     vfile = _read_yaml(path / "variants.yaml")
 
     variants: list[Variant] = []
-    # The original job text is always variant v00 of its job.
+    # The original job text is always variant v00 of its job. A job with no
+    # text (its original wording was not kept) only has its variants.
     for job in jobs:
-        variants.append(Variant(f"{job['id']}-v00", job["id"], job["text"].strip(), job.get("by", DEFAULT_JOB_BY)))
+        if job.get("text"):
+            variants.append(Variant(f"{job['id']}-v00", job["id"], job["text"].strip(), job.get("by", DEFAULT_JOB_BY)))
     for v in vfile.get("variants") or []:
         variants.append(Variant(v["id"], v["job_id"], v["text"].strip(), v.get("by", DEFAULT_VARIANT_BY)))
 

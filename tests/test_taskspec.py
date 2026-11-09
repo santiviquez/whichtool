@@ -21,3 +21,11 @@ def test_who_wrote_each_wording(tmp_path):
     sha = spec.variants_sha
     (task / "variants.yaml").write_text((task / "variants.yaml").read_text().replace("by: ChatGPT", "by: Someone"))
     assert load_task("t", tmp_path).variants_sha == sha  # the credit is not part of the prompts
+
+
+def test_a_job_without_text_has_only_its_variants(tmp_path):
+    task = tmp_path / "t"
+    task.mkdir()
+    (task / "jobs.yaml").write_text("jobs:\n  - id: j1\n    text: A job.\n  - id: j2\n")
+    (task / "variants.yaml").write_text("frozen: true\nvariants:\n  - id: j2-v01\n    job_id: j2\n    text: Only this.\n")
+    assert [v.id for v in load_task("t", tmp_path).variants] == ["j1-v00", "j2-v01"]
