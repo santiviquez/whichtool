@@ -8,7 +8,7 @@ Everything is in this repo: the prompts, every request and response, the code th
 
 **Read the write-up: [3,360 experiments to understand the future of product marketing](https://www.santiviquez.com/blog/3360-experiments-to-understand-the-future-of-product-marketing)**
 
-![Bar chart of which document-processing API each of the four models recommended when asked directly, out of 720 answers per model. Azure Document Intelligence, Google Document AI, the Gemini API and AWS Textract get most of the picks; startups such as Reducto, Extend and LlamaParse get few or none.](docs/which-api-each-model-picks.png)
+[![Bar chart of which document-processing API each of the four models recommended when asked directly, out of 720 answers per model. Azure Document Intelligence, Google Document AI, the Gemini API and AWS Textract get most of the picks; startups such as Reducto, Extend and LlamaParse get few or none.](docs/which-api-each-model-picks.png)](https://www.santiviquez.com/blog/3360-experiments-to-understand-the-future-of-product-marketing)
 
 ## What the models picked
 
