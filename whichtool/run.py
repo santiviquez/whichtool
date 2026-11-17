@@ -94,17 +94,32 @@ def spent_so_far(results_dir: Path = RESULTS_DIR, kind: str | None = None) -> fl
     return total
 
 
-def observed_reserves(task_dir: Path) -> dict[tuple[str, str, str], float]:
-    """The most expensive successful call seen so far for each configuration of a task."""
-    out: dict[tuple[str, str, str], float] = {}
+def observed_costs(task_dir: Path) -> dict[tuple[str, str, str], list[float]]:
+    """The cost of every successful call so far, by configuration of a task."""
+    out: dict[tuple[str, str, str], list[float]] = {}
     for path in task_dir.glob("*/calls.csv"):
         with path.open() as f:
             for r in csv.DictReader(f):
                 if r.get("status") != "ok":
                     continue
                 key = (r["study"], r["model"], r["effort"])
-                out[key] = max(out.get(key, 0.0), float(r.get("cost_usd") or 0))
+                out.setdefault(key, []).append(float(r.get("cost_usd") or 0))
     return out
+
+
+def observed_reserves(task_dir: Path) -> dict[tuple[str, str, str], float]:
+    """The most expensive successful call seen so far for each configuration of a task."""
+    return {k: max(v) for k, v in observed_costs(task_dir).items()}
+
+
+def expected_cost(todo: list, costs: dict[tuple[str, str, str], list[float]]) -> float:
+    """A guide to what the calls left to make will cost: the mean cost of earlier successful
+    calls of the same configuration (any job), or RESERVE_USD a call where there are none."""
+    total = 0.0
+    for cfg, _variant, _epoch in todo:
+        seen = costs.get(config_key(cfg))
+        total += sum(seen) / len(seen) if seen else C.RESERVE_USD
+    return total
 
 
 def git_commit() -> str:
@@ -268,11 +283,14 @@ def main(argv: list[str] | None = None) -> int:
     for c in plan:
         print(f"  {c.study.name:9s} {c.spec.label:12s} {c.effort:6s} {len(c.variants)} variants x {c.epochs} epochs")
     print(f"Spent so far ${total_spent:.2f} of ${BUDGET_USD:.0f}; this run may spend up to ${allowed:.2f}")
-    seen = observed_reserves(RESULTS_DIR / task.name)
+    costs = observed_costs(RESULTS_DIR / task.name)
+    seen = {k: max(v) for k, v in costs.items()}
     reserves = {config_key(c): seen.get(config_key(c), C.RESERVE_USD) for c in plan}
     from_data = sum(config_key(c) in seen for c in plan)
     print(f"Money set aside per running call: from earlier calls for {from_data} of {len(plan)} configurations, "
           f"${C.RESERVE_USD:.2f} (RESERVE_USD) for the rest")
+    print(f"Expected cost of the {len(todo)} calls: about ${expected_cost(todo, costs):.2f} "
+          f"(mean cost of earlier calls of the same configuration, on any job)")
     if args.dry_run:
         return 0
     if not todo:

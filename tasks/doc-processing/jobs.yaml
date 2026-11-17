@@ -87,3 +87,12 @@ jobs:
       returned as predictable JSON. I'm the only developer maintaining this system, and I have
       a week to ship the feature. I can't label training data, maintain custom models, or
       build complicated document workflows. Which API should we use?
+  # Redlined contracts, need: accuracy (added 2026-11-09). j9 and j10 are the
+  # same job except for the PDF format. ChatGPT wrote them: pair 1 of three
+  # candidate pairs (Santiago: any pair is fine). Only ChatGPT's four rewordings
+  # of each job are sent (variants.yaml, v01 to v04). The original text was not
+  # provided, so these two jobs have no `text` and no v00.
+  # redlined contracts as digital PDFs with a text layer
+  - id: j9
+  # the same contracts as image-only scans
+  - id: j10

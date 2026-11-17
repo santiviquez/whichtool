@@ -25,7 +25,7 @@ apis:
   aws_textract:
     names: [Amazon Textract, AWS Textract, Textract]
     code: ["client(\"textract\"", "client('textract'", "\"textract\"", "'textract'", client-textract,
-           amazon-textract, textractor, textract.amazonaws.com,
+           amazon-textract, "from textractor", "import textractor", textract.amazonaws.com,
            analyze_expense, start_document_analysis, start_expense_analysis]
   mistral_ocr:
     names: [Mistral OCR, Mistral Document AI, Mistral AI OCR, Mistral OCR API, Mistral AI Document AI]
@@ -76,6 +76,9 @@ apis:
     names: [ABBYY, ABBYY Vantage, ABBYY FlexiCapture, ABBYY Cloud OCR SDK, ABBYY FineReader Server,
             ABBYY Document AI]
     code: [abbyy]
+  mathpix:  # added 2026-11-09 for j9/j10 (Santiago OK)
+    names: [Mathpix, Mathpix OCR API, Mathpix PDF API]
+    code: [api.mathpix.com, mathpix]
   adobe_pdf_extract:
     names: [Adobe PDF Extract API, Adobe PDF Services API, Adobe PDF Services, Adobe Extract API,
             Adobe Acrobat Services]
@@ -84,7 +87,7 @@ apis:
     names: [Upstage Document Parse, Upstage Document AI, Upstage Information Extraction, Upstage]
     code: [api.upstage.ai, langchain_upstage]
   extend_ai:
-    names: [Extend AI, Extend.ai, Extend API]
+    names: [Extend AI, Extend.ai, Extend API, Extend Parse API]  # Extend Parse API added 2026-11-09 (Santiago OK)
     exact: [Extend]
     code: [extend.ai, extend_ai]
   chunkr:

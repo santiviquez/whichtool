@@ -209,8 +209,10 @@ RESULT_COLUMNS = [
 ]
 
 
-def result_row(r: dict, extra: dict, raw: dict, question: str, review: str, shas: dict | None = None) -> dict:
-    """One row of results.csv: the call, its question and answer, and its classification."""
+def result_row(r: dict, extra: dict, raw: dict, question: str, review: str, shas: dict | None = None,
+               wording_by: str = "") -> dict:
+    """One row of results.csv: the call, its question and answer, and its classification.
+    wording_by is who wrote the wording (the `by` of its job or variant in the task files)."""
     code = r.get("study") == "code"
     same = ["reason", "sentence", "searched", "n_searches", "search_queries", "input_tokens", "output_tokens",
             "reasoning_tokens", "cache_read_tokens", "cache_write_tokens", "cost_usd", "latency_s", "model_returned",
@@ -218,7 +220,7 @@ def result_row(r: dict, extra: dict, raw: dict, question: str, review: str, shas
     return {
         "call_id": r["call_id"], "experiment": r.get("study", ""), "model": r.get("model", ""),
         "effort": r.get("effort", ""), "job": r.get("job_id", ""), "wording": r.get("variant_id", ""),
-        "wording_by": "ChatGPT" if r.get("variant_id", "").endswith("v00") else "Claude",
+        "wording_by": wording_by,
         "repeat": r.get("epoch", ""), "question": question,
         # stated answers: the api field; code: the whole reply
         "answer": raw.get("output_text", "") if code else r.get("api", ""),
@@ -298,6 +300,7 @@ def main(argv: list[str] | None = None) -> int:
     rows, raws = load_calls(task, results_dir, args.include_probe)
     reviews = load_reviews(task, results_dir)
     questions = {v.id: v.text for v in task.variants}
+    authors = {v.id: v.by for v in task.variants}
     if not rows:
         sys.exit(f"No calls found under {results_dir / task.name}")
 
@@ -310,7 +313,8 @@ def main(argv: list[str] | None = None) -> int:
         raw = raws.get(r["call_id"], {})
         extra = classify(r, raw.get("output_text", ""), table, manual.get(r["call_id"]))
         question = questions.get(r.get("variant_id", ""), "")
-        results.append(result_row(r, extra, raw, question, reviews.get(r["call_id"], ""), shas))
+        results.append(result_row(r, extra, raw, question, reviews.get(r["call_id"], ""), shas,
+                                  authors.get(r.get("variant_id", ""), "")))
 
     out = results_dir / task.name / "results.csv"
     with out.open("w", newline="") as f:

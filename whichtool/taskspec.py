@@ -8,6 +8,10 @@ A task folder holds everything specific to one benchmark task:
 - aliases.yaml       API names and code signatures -> canonical API ids
 - manual_apis.yaml   calls classified by hand (optional)
 
+Each job and variant may say who wrote its wording (`by`). Without it, a
+job's original text (v00) is credited to ChatGPT and a variant to Claude,
+which is how j1 to j8 of doc-processing were written.
+
 Adding a new task means adding a new folder; nothing else changes.
 """
 
@@ -24,11 +28,16 @@ from .config import TASKS_DIR
 from .config import ANSWER_INSTRUCTION, CODE_INSTRUCTION
 
 
+DEFAULT_JOB_BY = "ChatGPT"
+DEFAULT_VARIANT_BY = "Claude"
+
+
 @dataclass(frozen=True)
 class Variant:
     id: str
     job_id: str
     text: str
+    by: str = ""  # who wrote this wording; not part of variants_sha
 
 
 @dataclass
@@ -68,11 +77,13 @@ def load_task(name: str, tasks_dir: Path = TASKS_DIR) -> TaskSpec:
     vfile = _read_yaml(path / "variants.yaml")
 
     variants: list[Variant] = []
-    # The original job text is always variant v00 of its job.
+    # The original job text is always variant v00 of its job. A job with no
+    # text (its original wording was not kept) only has its variants.
     for job in jobs:
-        variants.append(Variant(f"{job['id']}-v00", job["id"], job["text"].strip()))
+        if job.get("text"):
+            variants.append(Variant(f"{job['id']}-v00", job["id"], job["text"].strip(), job.get("by", DEFAULT_JOB_BY)))
     for v in vfile.get("variants") or []:
-        variants.append(Variant(v["id"], v["job_id"], v["text"].strip()))
+        variants.append(Variant(v["id"], v["job_id"], v["text"].strip(), v.get("by", DEFAULT_VARIANT_BY)))
 
     ids = [v.id for v in variants]
     dupes = {i for i in ids if ids.count(i) > 1}

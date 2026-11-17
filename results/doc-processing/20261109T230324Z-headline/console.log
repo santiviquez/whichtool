@@ -1,0 +1,20 @@
+
+===== 2026-11-09T23:03:24.430997+00:00 python -m whichtool.run --task doc-processing --study headline --jobs j9,j10 --epochs 5 --label headline: j9 and j10 x 4 wordings (v01-v04) x 5 repeats
+Task doc-processing | study | 20261109T230324Z-headline | 12 configurations | 480 calls to make
+  headline  opus-5.5     medium 8 variants x 5 epochs
+  headline  opus-5.5     high   8 variants x 5 epochs
+  headline  opus-5.5     xhigh  8 variants x 5 epochs
+  headline  fable-5.1    medium 8 variants x 5 epochs
+  headline  fable-5.1    high   8 variants x 5 epochs
+  headline  fable-5.1    xhigh  8 variants x 5 epochs
+  headline  gpt-6-astra  medium 8 variants x 5 epochs
+  headline  gpt-6-astra  high   8 variants x 5 epochs
+  headline  gpt-6-astra  xhigh  8 variants x 5 epochs
+  headline  gpt-5.6-sol  medium 8 variants x 5 epochs
+  headline  gpt-5.6-sol  high   8 variants x 5 epochs
+  headline  gpt-5.6-sol  xhigh  8 variants x 5 epochs
+Spent so far $138.02 of $174; this run may spend up to $35.98
+Money set aside per running call: from earlier calls for 12 of 12 configurations, $0.30 (RESERVE_USD) for the rest
+Expected cost of the 480 calls: about $12.59 (mean cost of earlier calls of the same configuration, on any job)
+
+Run 20261109T230324Z-headline: 480 calls written (0 failed), 0 skipped for budget, $29.87 spent. Files in /home/user/whichtool/results/doc-processing/20261109T230324Z-headline

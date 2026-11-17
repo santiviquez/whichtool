@@ -1,0 +1,12 @@
+
+===== 2026-11-09T23:37:49.469791+00:00 python -m whichtool.run --task doc-processing --study code --epochs 2 --variants j9-v01,j9-v02,j9-v03,j10-v01,j10-v02,j10-v03 --label code: j9 and j10 x 3 wordings (v01-v03) x 2 repeats
+Task doc-processing | study | 20261109T233749Z-code | 4 configurations | 48 calls to make
+  code      opus-5.5     high   6 variants x 2 epochs
+  code      fable-5.1    high   6 variants x 2 epochs
+  code      gpt-6-astra  high   6 variants x 2 epochs
+  code      gpt-5.6-sol  high   6 variants x 2 epochs
+Spent so far $184.41 of $210; this run may spend up to $25.59
+Money set aside per running call: from earlier calls for 4 of 4 configurations, $0.30 (RESERVE_USD) for the rest
+Expected cost of the 48 calls: about $9.50 (mean cost of earlier calls of the same configuration, on any job)
+
+Run 20261109T233749Z-code: 48 calls written (0 failed), 0 skipped for budget, $11.16 spent. Files in /home/user/whichtool/results/doc-processing/20261109T233749Z-code

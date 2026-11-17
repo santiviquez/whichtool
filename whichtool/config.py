@@ -167,7 +167,7 @@ TIMEOUT_S = 1200  # per attempt; Claude calls stream, so this is rarely reached
 
 # ============================================================= budget
 
-BUDGET_USD = 140.0  # hard cap on API spend across every run in results/ (raised from $100 to $110, then $140 on 2026-11-06, Santiago OK)
+BUDGET_USD = 210.0  # hard cap on API spend across every run in results/ (raised from $100 to $110, then $140 on 2026-11-06, then $174 and $210 on 2026-11-09 for j9 and j10, Santiago OK)
 PROBE_BUDGET_USD = 5.0  # cap across cost-probe runs
 PROBE_CALLS_PER_CONFIG = 2  # the probe makes this many calls per configuration
 # Money set aside for a call that has started but not finished: the guard
