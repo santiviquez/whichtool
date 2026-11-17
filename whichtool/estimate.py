@@ -50,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {key[0]:9s} {key[1]:12s} {key[2]:6s} {len(c):5d} {sum(t)/len(t):8.0f} "
               f"{sum(c)/len(c):8.4f} {max(c):8.4f}")
 
-    spent = spent_so_far(results_dir)
+    spent = spent_so_far(results_dir / task.name)
     remaining = (BUDGET_USD - spent) * (1 - SAFETY_MARGIN)
     shares = STUDY_SHARES
     n_variants = len(task.variants)
