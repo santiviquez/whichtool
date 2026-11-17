@@ -71,7 +71,7 @@ def _run_kind(run_dir: Path) -> str:
 
 
 def spent_so_far(results_dir: Path = RESULTS_DIR, kind: str | None = None) -> float:
-    """The ledger: cost_usd over every calls.csv under results/ (optionally one run kind),
+    """The ledger: cost_usd over every calls.csv under results_dir (optionally one run kind),
     plus the set-aside amount of every call that started but was never written."""
     total = 0.0
     for path in results_dir.glob("**/calls.csv"):
@@ -147,7 +147,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--epochs", type=int, default=1, help="repeats of every variant")
     p.add_argument("--jobs", default=None, help="only these job ids (comma-separated)")
     p.add_argument("--variants", default=None, help="only these variant ids (comma-separated)")
-    p.add_argument("--max-usd", type=float, default=None, help="cap for this run (also capped by the total budget)")
+    p.add_argument("--max-usd", type=float, default=None, help="cap for this run (also capped by the task's budget)")
     p.add_argument("--allow-unfrozen", action="store_true", help="run a study before variants.yaml is frozen")
     p.add_argument("--label", default="", help="free-text note stored in run.json")
     p.add_argument("--dry-run", action="store_true", help="print the plan and exit without calling any API")
@@ -272,8 +272,9 @@ def main(argv: list[str] | None = None) -> int:
     skip = done_slots(run_dir / "calls.csv")
     todo = [s for s in slots(plan) if slot_key(*s) not in skip]
 
-    total_spent = spent_so_far()
-    cap = PROBE_BUDGET_USD - spent_so_far(kind="probe") if run_kind == "probe" else float("inf")
+    # Each task has its own ledger: only the runs in results/<task>/ count toward its budget.
+    total_spent = spent_so_far(RESULTS_DIR / task.name)
+    cap = PROBE_BUDGET_USD - spent_so_far(RESULTS_DIR / task.name, kind="probe") if run_kind == "probe" else float("inf")
     allowed = min(cap, BUDGET_USD - total_spent)
     if args.max_usd is not None:
         allowed = min(allowed, args.max_usd)
@@ -282,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
           + (f" ({len(skip)} already done)" if skip else ""))
     for c in plan:
         print(f"  {c.study.name:9s} {c.spec.label:12s} {c.effort:6s} {len(c.variants)} variants x {c.epochs} epochs")
-    print(f"Spent so far ${total_spent:.2f} of ${BUDGET_USD:.0f}; this run may spend up to ${allowed:.2f}")
+    print(f"Spent so far on {task.name}: ${total_spent:.2f} of ${BUDGET_USD:.0f}; this run may spend up to ${allowed:.2f}")
     costs = observed_costs(RESULTS_DIR / task.name)
     seen = {k: max(v) for k, v in costs.items()}
     reserves = {config_key(c): seen.get(config_key(c), C.RESERVE_USD) for c in plan}

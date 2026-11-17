@@ -1,8 +1,9 @@
 [project]
 name = "whichtool"
 version = "0.1.0"
-description = "Benchmark: how often do frontier models pick the best tool for a job?"
+description = "Do AI agents recommend the best tool for the job? Ask frontier models to pick a hosted API and record what they pick."
 readme = "README.md"
+license = {text = "MIT"}
 requires-python = ">=3.11"
 dependencies = [
     "anthropic>=2.4.0",

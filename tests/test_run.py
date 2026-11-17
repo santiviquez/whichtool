@@ -52,3 +52,23 @@ def test_expected_cost_uses_the_mean_of_earlier_calls(tmp_path):
     new = Config(STUDIES["headline"], MODELS["opus-5.5"], "medium", [v], 1)
     todo = [(seen, v, 1), (seen, v, 2), (new, v, 1)]
     assert abs(expected_cost(todo, costs) - (0.20 * 2 + C.RESERVE_USD)) < 1e-9
+
+
+def test_each_task_has_its_own_budget(tmp_path, monkeypatch, capsys):
+    from pathlib import Path
+
+    from whichtool import run
+    from whichtool.taskspec import load_task
+
+    fixtures = Path(__file__).parent / "fixtures"
+    monkeypatch.setattr(run, "load_task", lambda name: load_task(name, fixtures))
+    monkeypatch.setattr(run, "RESULTS_DIR", tmp_path)
+    for task, cost in (("example", "0.25"), ("another-task", "180")):
+        d = tmp_path / task / "20260101T000000Z-headline"
+        d.mkdir(parents=True)
+        (d / "calls.csv").write_text(
+            "call_id,run_kind,study,model,effort,status,cost_usd\n"
+            f"c1,study,headline,opus-5.5,high,ok,{cost}\n"
+        )
+    run.main(["--task", "example", "--allow-unfrozen", "--dry-run"])
+    assert f"Spent so far on example: $0.25 of ${C.BUDGET_USD:.0f}" in capsys.readouterr().out
