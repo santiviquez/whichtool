@@ -28,19 +28,19 @@ uv pip install -e .
 export OPENAI_API_KEY=...
 export ANTHROPIC_API_KEY=...
 
-cp -r tests/fixtures/example tasks/my-task   # edit the YAML files, then set frozen: true in variants.yaml
+cp -r tests/fixtures/example tasks/my-task      # then edit its YAML files
 
-python -m whichtool.run --task my-task --probe                        # a few calls to measure the cost
-python -m whichtool.run --task my-task --study headline --epochs 5    # add --dry-run to see the plan first
-python -m whichtool.classify --task my-task                           # -> results/my-task/results.csv
+python -m whichtool.run --task my-task --probe     # a few calls to measure cost
+python -m whichtool.run --task my-task --study headline --epochs 5
+python -m whichtool.classify --task my-task        # -> results/my-task/results.csv
 ```
 
-`headline` asks for a recommendation, `search` lets the model search the web first, and `code` asks it to write the integration code. Models, effort levels, prompts and the spending cap (`BUDGET_USD`, per task) are all in [`whichtool/config.py`](whichtool/config.py).
+There are three studies: `headline` asks for a recommendation, `search` lets the model search the web first, and `code` asks it to write the integration code. Study runs only start once you set `frozen: true` in `variants.yaml`, and `--dry-run` shows the plan and the expected cost before you spend anything. Models, effort levels, prompts and the spending cap (`BUDGET_USD`, per task) are in [`whichtool/config.py`](whichtool/config.py).
 
 ## What's in here
 
 - [`results/doc-processing/results.csv`](results/doc-processing/results.csv): one row per experiment with the prompt, the answer, the API it maps to, what the model searched and the cost. Start here.
-- `results/doc-processing/<run_id>/`: the raw files of each run of the scripts, with the exact request and response of every call.
+- `results/doc-processing/<run_id>/`: everything each run saved, including the exact request and response of every call.
 - [`tasks/doc-processing/`](tasks/doc-processing): the 10 jobs, their 48 wordings and the API names.
 - [`whichtool/`](whichtool): the code.
 
